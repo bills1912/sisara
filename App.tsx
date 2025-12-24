@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { initialData } from './data';
 import { BudgetRow, ThemeConfig, ChangeStatus, RowType } from './types';
 import BudgetRowItem from './components/BudgetRowItem';
@@ -7,7 +7,7 @@ import Sidebar from './components/Sidebar';
 import Settings from './components/Settings';
 import BottomEditor from './components/BottomEditor';
 import AddRowModal from './components/AddRowModal';
-import { Eye, EyeOff, Moon, Sun, TrendingUp, Calendar, CheckSquare, Square, ChevronDown, ChevronUp } from 'lucide-react';
+import { Eye, EyeOff, Moon, Sun, TrendingUp, Calendar, CheckSquare, Square, ChevronDown, ChevronUp, ArrowDown, ArrowUp } from 'lucide-react';
 import { MONTH_NAMES, QUARTERS, defaultTheme, formatCurrency, getAccountPrefix, formatPercent } from './utils';
 
 function App() {
@@ -16,6 +16,10 @@ function App() {
   const [showMenjadi, setShowMenjadi] = useState(true);
   const [showEfisiensi, setShowEfisiensi] = useState(true);
   
+  // Scroll & Ref
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState(false);
+
   // Quarter Visibility State (Default: All visible)
   const [visibleQuarterIndices, setVisibleQuarterIndices] = useState<number[]>([0, 1, 2, 3]);
   const [isQuarterMenuOpen, setIsQuarterMenuOpen] = useState(false);
@@ -37,6 +41,35 @@ function App() {
 
   // Add Row State
   const [addingChildTo, setAddingChildTo] = useState<BudgetRow | null>(null);
+
+  // --- SCROLL LOGIC ---
+  useEffect(() => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+        const { scrollTop, scrollHeight, clientHeight } = container;
+        // Check if we are close to the bottom (within 100px)
+        const isBottom = scrollTop + clientHeight >= scrollHeight - 100;
+        setIsAtBottom(isBottom);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [currentView]); // Re-bind if view changes
+
+  const toggleScrollPosition = () => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+
+    if (isAtBottom) {
+        // Scroll to Top
+        container.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+        // Scroll to Bottom
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    }
+  };
 
   // Helper to find row by ID recursively
   const findRowById = (rows: BudgetRow[], id: string): BudgetRow | null => {
@@ -474,7 +507,7 @@ function App() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
+      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 relative">
         
         {/* Top Header Panel */}
         <div className={`${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-4 shadow-sm border-b z-[45] flex-shrink-0 transition-colors`}>
@@ -569,7 +602,10 @@ function App() {
              />
           </div>
         ) : (
-          <div className="flex-1 overflow-auto relative w-full pb-20">
+          <div 
+             ref={tableContainerRef}
+             className="flex-1 overflow-auto relative w-full pb-20 scroll-smooth"
+          >
             <div className="inline-block min-w-full align-middle">
               <table className="min-w-full border-separate border-spacing-0">
                 <thead className={`${isDarkMode ? 'bg-gray-800' : 'bg-gray-50'} top-0 sticky z-[40]`}>
@@ -840,6 +876,21 @@ function App() {
               </table>
             </div>
           </div>
+        )}
+
+        {/* Floating Action Button for Scroll */}
+        {currentView === 'table' && (
+            <button
+                onClick={toggleScrollPosition}
+                className={`fixed bottom-6 right-6 z-[70] p-3 rounded-full shadow-xl transition-all duration-300 border border-white/20 backdrop-blur-sm 
+                ${isAtBottom 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white animate-in slide-in-from-bottom-5' 
+                    : 'bg-white hover:bg-gray-50 text-blue-600 border-gray-200'
+                }`}
+                title={isAtBottom ? "Kembali ke Atas" : "Ke Bagian Total / Analisis"}
+            >
+                {isAtBottom ? <ArrowUp size={24} /> : <ArrowDown size={24} />}
+            </button>
         )}
         
         {/* Bottom Sheet Form (Unchanged) */}
