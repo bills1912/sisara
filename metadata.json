@@ -1,0 +1,5 @@
+{
+  "name": "Sistem Perencanaan Anggaran Statistik",
+  "description": "Aplikasi hybrid spreadsheet untuk manajemen dan revisi anggaran dengan validasi hierarki dan tracking perubahan otomatis.",
+  "requestFramePermissions": []
+}
