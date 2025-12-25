@@ -71,7 +71,7 @@ class BudgetService:
             "_id": row_id,
             "code": row_data.code,
             "description": row_data.description,
-            "type": row_data.type.value,
+            "type": row_data.type.value if isinstance(row_data.type, RowType) else row_data.type,
             "semula": row_data.semula.model_dump() if row_data.semula else None,
             "menjadi": row_data.menjadi.model_dump() if row_data.menjadi else None,
             "monthlyAllocation": {
@@ -117,7 +117,7 @@ class BudgetService:
         if row_data.description is not None:
             update_data["description"] = row_data.description
         if row_data.type is not None:
-            update_data["type"] = row_data.type.value
+            update_data["type"] = row_data.type.value if isinstance(row_data.type, RowType) else row_data.type
         if row_data.semula is not None:
             update_data["semula"] = row_data.semula.model_dump()
         if row_data.menjadi is not None:
@@ -218,6 +218,69 @@ class BudgetService:
             {"$set": {f"monthlyAllocation.{month_index}": detail.model_dump()}}
         )
         return result.modified_count > 0
+
+    async def sync_all(self, data: List[BudgetRowResponse]) -> int:
+        """
+        Sync all budget data - delete existing and insert new tree structure.
+        Accepts array of budget rows with nested children.
+        """
+        collection = self.get_collection()
+        
+        # Delete all existing data
+        await collection.delete_many({})
+        
+        # Flatten tree and insert
+        def flatten_tree(rows: List[BudgetRowResponse], parent_id: Optional[str] = None) -> List[dict]:
+            documents = []
+            for order, row in enumerate(rows):
+                # Convert monthlyAllocation - handle both dict and object
+                monthly_alloc = {}
+                if row.monthlyAllocation:
+                    for k, v in row.monthlyAllocation.items():
+                        if hasattr(v, 'model_dump'):
+                            monthly_alloc[str(k)] = v.model_dump()
+                        elif isinstance(v, dict):
+                            monthly_alloc[str(k)] = v
+                        else:
+                            monthly_alloc[str(k)] = v
+                
+                # Convert semula/menjadi
+                semula = None
+                if row.semula:
+                    semula = row.semula.model_dump() if hasattr(row.semula, 'model_dump') else row.semula
+                
+                menjadi = None
+                if row.menjadi:
+                    menjadi = row.menjadi.model_dump() if hasattr(row.menjadi, 'model_dump') else row.menjadi
+                
+                doc = {
+                    "_id": row.id,
+                    "code": row.code,
+                    "description": row.description,
+                    "type": row.type.value if isinstance(row.type, RowType) else row.type,
+                    "semula": semula,
+                    "menjadi": menjadi,
+                    "monthlyAllocation": monthly_alloc,
+                    "isBlocked": row.isBlocked,
+                    "isOpen": row.isOpen,
+                    "parent_id": parent_id,
+                    "order": order
+                }
+                documents.append(doc)
+                
+                # Process children
+                if row.children:
+                    child_docs = flatten_tree(row.children, row.id)
+                    documents.extend(child_docs)
+            
+            return documents
+        
+        all_docs = flatten_tree(data, None)
+        
+        if all_docs:
+            await collection.insert_many(all_docs)
+        
+        return len(all_docs)
 
 
 budget_service = BudgetService()

@@ -100,5 +100,35 @@ class MasterDataService:
         result = await collection.insert_many(docs)
         return len(result.inserted_ids)
 
+    async def sync_all(self, data: Dict[str, List[MasterDataItem]]) -> Dict[str, int]:
+        """
+        Sync all master data - delete existing and insert new.
+        Accepts format: { "KRO": [{code, desc}, ...], "RO": [...], ... }
+        """
+        collection = self.get_collection()
+        counts = {}
+        
+        for type_key, items in data.items():
+            # Delete existing items of this type
+            await collection.delete_many({"type": type_key})
+            
+            # Insert new items
+            if items:
+                docs = [
+                    {
+                        "_id": str(ObjectId()),
+                        "type": type_key,
+                        "code": item.code,
+                        "desc": item.desc
+                    }
+                    for item in items
+                ]
+                result = await collection.insert_many(docs)
+                counts[type_key] = len(result.inserted_ids)
+            else:
+                counts[type_key] = 0
+        
+        return counts
+
 
 master_data_service = MasterDataService()
