@@ -1,29 +1,50 @@
+
 import React, { useState } from 'react';
-import { BudgetRow, RowType } from '../types';
+import { BudgetRow, RowType, MasterData } from '../types';
 import { X } from 'lucide-react';
 
 interface Props {
   parentRow: BudgetRow;
+  masterData: MasterData;
   onClose: () => void;
   onSave: (parentId: string, newRow: BudgetRow) => void;
 }
 
-const AddRowModal: React.FC<Props> = ({ parentRow, onClose, onSave }) => {
-  const [code, setCode] = useState('');
-  const [description, setDescription] = useState('');
+const AddRowModal: React.FC<Props> = ({ parentRow, masterData, onClose, onSave }) => {
   const [type, setType] = useState<RowType>(RowType.ITEM);
+  
+  // Selection State
+  const [selectedCode, setSelectedCode] = useState('');
+  const [selectedDesc, setSelectedDesc] = useState('');
   
   // Default values for data
   const [volume, setVolume] = useState('0');
   const [unit, setUnit] = useState('PAKET');
   const [price, setPrice] = useState('0');
 
+  // Helpers
+  const currentOptions = masterData[type] || [];
+
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const idx = e.target.selectedIndex;
+      if (idx > 0) { // 0 is placeholder
+          const opt = currentOptions[idx - 1];
+          setSelectedCode(opt.code);
+          setSelectedDesc(opt.desc);
+      } else {
+          setSelectedCode('');
+          setSelectedDesc('');
+      }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Determine the type automatically based on parent if possible, 
-    // but for now user can select or we default to ITEM which is most common for "Add New"
-    
+    if (!selectedCode || !selectedDesc) {
+        alert("Mohon pilih Kode dan Uraian");
+        return;
+    }
+
     const newId = `${parentRow.id}-${Math.floor(Math.random() * 10000)}`;
     
     const vol = parseFloat(volume);
@@ -32,10 +53,10 @@ const AddRowModal: React.FC<Props> = ({ parentRow, onClose, onSave }) => {
 
     const newRow: BudgetRow = {
       id: newId,
-      code: code,
-      description: description,
+      code: selectedCode,
+      description: selectedDesc,
       type: type,
-      semula: null, // New items have no "Semula"
+      semula: null,
       menjadi: {
           volume: vol,
           unit: unit,
@@ -69,41 +90,50 @@ const AddRowModal: React.FC<Props> = ({ parentRow, onClose, onSave }) => {
             <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Tipe Baris</label>
             <select 
                 value={type} 
-                onChange={e => setType(e.target.value as RowType)}
+                onChange={e => {
+                    setType(e.target.value as RowType);
+                    setSelectedCode('');
+                    setSelectedDesc('');
+                }}
                 className="w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-blue-500"
             >
                 <option value={RowType.KRO}>KRO (Keluaran)</option>
                 <option value={RowType.RO}>RO (Rincian Output)</option>
                 <option value={RowType.COMPONENT}>Komponen</option>
                 <option value={RowType.SUBCOMPONENT}>Sub Komponen</option>
+                <option value={RowType.HEADER_ACCOUNT}>Kelompok Akun (Header)</option>
                 <option value={RowType.ITEM}>Item (Akun 6 Digit)</option>
                 <option value={RowType.ITEM}>Rincian Item (Detail)</option>
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-             <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Kode</label>
-                <input 
-                    required
-                    type="text" 
-                    className="w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-blue-500"
-                    value={code}
-                    onChange={e => setCode(e.target.value)}
-                    placeholder="Contoh: 524111"
-                />
+          <div className="border border-gray-200 rounded p-3 bg-gray-50">
+             <div className="flex justify-between items-center mb-2">
+                 <label className="block text-xs font-semibold text-gray-500 uppercase">Pilih Kode & Uraian</label>
              </div>
-             <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Uraian</label>
-                <input 
-                    required
-                    type="text" 
-                    className="w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-blue-500"
-                    value={description}
-                    onChange={e => setDescription(e.target.value)}
-                    placeholder="Nama kegiatan..."
-                />
-             </div>
+
+             <select 
+                className="w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-blue-500"
+                onChange={handleSelectChange}
+                value={selectedCode ? currentOptions.find(o => o.code === selectedCode)?.desc : ''} 
+             >
+                <option value="">-- Pilih {type} --</option>
+                {currentOptions.length === 0 ? (
+                    <option value="" disabled>Data kosong. Tambahkan di menu Master Data.</option>
+                ) : (
+                    currentOptions.map((opt, idx) => (
+                        <option key={`${opt.code}-${idx}`} value={opt.desc}>
+                            [{opt.code}] {opt.desc}
+                        </option>
+                    ))
+                )}
+             </select>
+             
+             {selectedCode && (
+                 <div className="mt-2 text-xs text-gray-600 bg-white border p-2 rounded">
+                     <strong>Terpilih:</strong> [{selectedCode}] {selectedDesc}
+                 </div>
+             )}
           </div>
 
           <div className="border-t pt-4 mt-4">

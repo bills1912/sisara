@@ -3,7 +3,6 @@ import { BudgetRow, MonthlyDetail } from '../types';
 import { X, Save, Calendar, FileText, CheckCircle, Hash } from 'lucide-react';
 import { MONTH_NAMES, formatCurrency, formatNumberForInput, parseNumberFromInput } from '../utils';
 
-// Moved OUTSIDE the main component to prevent re-mounting on every keystroke
 interface CurrencyInputProps {
   label: string;
   value: number;
@@ -87,9 +86,21 @@ const BottomEditor: React.FC<BottomEditorProps> = ({ row, section, monthIndex, o
     onClose();
   };
 
+  const calculateTotal = () => {
+      const jmlReal = parseFloat(formData.rpd) || 0;
+      const jmlAkan = parseFloat(formData.realization) || 0;
+      return jmlReal + jmlAkan;
+  };
+
+  const calculateGap = () => {
+      const total = calculateTotal();
+      const sp2d = parseFloat(formData.sp2d) || 0;
+      return total - sp2d;
+  };
+
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-5px_20px_rgba(0,0,0,0.15)] z-[60] border-t border-gray-200 animate-in slide-in-from-bottom duration-300 text-gray-900">
-      <div className="max-w-7xl mx-auto flex flex-col h-[320px] md:h-auto">
+      <div className="max-w-7xl mx-auto flex flex-col h-[350px] md:h-auto">
         
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-3 border-b bg-gray-50">
@@ -152,14 +163,14 @@ const BottomEditor: React.FC<BottomEditorProps> = ({ row, section, monthIndex, o
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               
               <CurrencyInput 
-                label="RPD (Rencana)"
+                label="Jumlah Realisasi"
                 icon={<Hash size={12}/>}
                 value={formData.rpd}
                 onChange={(val: number) => setFormData({...formData, rpd: val})}
               />
               
               <CurrencyInput 
-                label="Jml Akan Realisasi"
+                label="Jml Akan Direalisasikan"
                 icon={<Hash size={12}/>}
                 value={formData.realization}
                 onChange={(val: number) => setFormData({...formData, realization: val})}
@@ -177,7 +188,7 @@ const BottomEditor: React.FC<BottomEditorProps> = ({ row, section, monthIndex, o
               </div>
 
               <div className="space-y-1">
-                <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase"><Calendar size={12}/> Tanggal</label>
+                <label className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase"><Calendar size={12}/> Tgl Pelaksanaan</label>
                 <input
                   type="date"
                   className="w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
@@ -201,15 +212,19 @@ const BottomEditor: React.FC<BottomEditorProps> = ({ row, section, monthIndex, o
                         checked={formData.isVerified || false}
                         onChange={e => setFormData({...formData, isVerified: e.target.checked})}
                     />
-                    <span className="text-sm font-medium text-gray-800">Sudah Realisasi</span>
+                    <span className="text-sm font-medium text-gray-800">Ceklis Realisasi</span>
                  </label>
               </div>
 
-              <div className="col-span-2 bg-blue-50 rounded p-3 flex flex-col justify-center border border-blue-100">
-                  <div className="flex justify-between text-sm">
-                      <span className="text-gray-700">Selisih RPD vs Realisasi:</span>
-                      <span className={`font-bold ${(formData.rpd - formData.realization) !== 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {formatCurrency((formData.rpd || 0) - (formData.realization || 0))}
+              <div className="col-span-2 bg-blue-50 rounded p-3 flex flex-col justify-center border border-blue-100 gap-1">
+                   <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 font-semibold">TOTAL (Real + Akan):</span>
+                      <span className="font-bold text-gray-900">{formatCurrency(calculateTotal())}</span>
+                  </div>
+                  <div className="flex justify-between text-sm border-t border-blue-200 pt-1 mt-1">
+                      <span className="text-gray-700">Selisih (Total - SP2D):</span>
+                      <span className={`font-bold ${calculateGap() !== 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {formatCurrency(calculateGap())}
                       </span>
                   </div>
               </div>

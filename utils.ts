@@ -1,4 +1,5 @@
-import { BudgetRow, ChangeStatus, MonthlyAllocation, ThemeConfig } from './types';
+
+import { BudgetRow, ChangeStatus, MonthlyAllocation, ThemeConfig, RowType } from './types';
 
 export const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('id-ID', {
@@ -75,14 +76,39 @@ export const defaultTheme: ThemeConfig = {
 
 export const getRowIndentClass = (type: string): string => {
   switch (type) {
-    case 'PROGRAM': return 'pl-2 font-bold bg-gray-100';
-    case 'KRO': return 'pl-6 font-semibold text-blue-800';
-    case 'RO': return 'pl-10 font-medium text-red-800';
-    case 'COMPONENT': return 'pl-14 font-medium';
-    case 'SUBCOMPONENT': return 'pl-20 italic text-gray-600';
+    case 'PROGRAM': return 'pl-2';
+    case 'KRO': return 'pl-6';
+    case 'RO': return 'pl-10';
+    case 'COMPONENT': return 'pl-14';
+    case 'SUBCOMPONENT': return 'pl-20';
+    case 'HEADER_ACCOUNT': return 'pl-20 italic'; // Indent same as subcomponent or slightly deeper
     case 'ITEM': return 'pl-24';
     default: return 'pl-2';
   }
+};
+
+export const getRowBaseColor = (type: string, isDarkMode: boolean): string => {
+    if (isDarkMode) return 'transparent'; // Use default dark mode bg
+    
+    switch (type) {
+        case RowType.PROGRAM: return 'bg-blue-50'; // Pastel Blue
+        case RowType.KRO: return 'bg-emerald-50'; // Pastel Green
+        case RowType.RO: return 'bg-amber-50'; // Pastel Yellow
+        case RowType.HEADER_ACCOUNT: return 'bg-gray-100 font-bold text-gray-600';
+        default: return 'bg-white';
+    }
+};
+
+export const getRowTextStyle = (type: string): string => {
+    switch (type) {
+        case RowType.PROGRAM: return 'font-bold text-blue-900 uppercase tracking-wide';
+        case RowType.KRO: return 'font-bold text-emerald-900';
+        case RowType.RO: return 'font-bold text-amber-900';
+        case RowType.COMPONENT: return 'font-semibold text-gray-800';
+        case RowType.SUBCOMPONENT: return 'font-medium italic text-gray-600';
+        case RowType.HEADER_ACCOUNT: return 'font-bold text-gray-500 uppercase';
+        default: return 'text-gray-900';
+    }
 };
 
 export const QUARTERS = [

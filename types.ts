@@ -1,9 +1,11 @@
+
 export enum RowType {
   PROGRAM = 'PROGRAM',
   KRO = 'KRO', // Klasifikasi Rincian Output
   RO = 'RO',   // Rincian Output
   COMPONENT = 'COMPONENT',
   SUBCOMPONENT = 'SUBCOMPONENT',
+  HEADER_ACCOUNT = 'HEADER_ACCOUNT', // New Category: A. TANPA SUB KOMPONEN
   ITEM = 'ITEM'
 }
 
@@ -65,6 +67,11 @@ export interface ThemeConfig {
   [ChangeStatus.BLOCKED]: string;
   [ChangeStatus.UNCHANGED]: string;
 }
+
+// Master data type definition
+export type MasterData = {
+    [key in RowType]?: { code: string; desc: string }[];
+};
 
 // Helper to check if a row is a calculation leaf (usually ITEM or RO depending on depth)
 export const isLeafCalculation = (type: RowType): boolean => {
