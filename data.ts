@@ -1,3 +1,5 @@
+
+
 import { BudgetRow, RowType } from './types';
 
 export const initialData: BudgetRow[] = [
@@ -57,7 +59,7 @@ export const initialData: BudgetRow[] = [
                        {
                         id: '1-1-1-1-1-1',
                         code: '521811',
-                        description: 'Belanja Barang Persediaan Barang Konsumsi (KPPN.007-Gunung Sitoli)',
+                        description: 'Belanja Barang Persediaan Barang Konsumsi',
                         type: RowType.ITEM,
                         semula: { volume: 1, unit: 'PAKET', price: 1490000, total: 1490000 },
                         menjadi: { volume: 1, unit: 'PAKET', price: 1490000, total: 1490000 },

@@ -405,8 +405,8 @@ function App() {
   const getSelisihOffset = () => descWidth + (showSemula ? semulaWidth : 0) + (showMenjadi ? menjadiWidth : 0);
   const getEfisiensiOffset = () => descWidth + (showSemula ? semulaWidth : 0) + (showMenjadi ? menjadiWidth : 0) + (showSelisih ? selisihWidth : 0);
 
-  // --- CALCULATE GRAND TOTALS ---
-  const { grandTotals } = useMemo(() => {
+  // --- CALCULATE GRAND TOTALS AND ANALYSIS ---
+  const { grandTotals, analysisData } = useMemo(() => {
       const totals = {
           semula: 0,
           menjadi: 0,
@@ -415,12 +415,25 @@ function App() {
           monthly: {} as Record<number, { rpd: number, realization: number, sp2d: number, total: number }>
       };
 
+      // Analysis breakdown storage
+      const analysis = {
+        months: {} as Record<number, Record<string, { rpd: number, sp2d: number, realization: number, pagu: number }>>,
+      };
+
       for(let i=0; i<12; i++) {
           totals.monthly[i] = { rpd: 0, realization: 0, sp2d: 0, total: 0 };
+          analysis.months[i] = {
+              '51': { rpd: 0, sp2d: 0, realization: 0, pagu: 0 },
+              '52': { rpd: 0, sp2d: 0, realization: 0, pagu: 0 },
+              '53': { rpd: 0, sp2d: 0, realization: 0, pagu: 0 },
+              'OTHER': { rpd: 0, sp2d: 0, realization: 0, pagu: 0 }
+          };
       }
 
       const traverse = (rows: BudgetRow[]) => {
           rows.forEach(row => {
+              const prefix = getAccountPrefix(row.code);
+              
               if (row.children && row.children.length > 0) {
                   traverse(row.children);
               } else {
@@ -429,6 +442,15 @@ function App() {
                   totals.semula += sem;
                   totals.menjadi += men;
                   
+                  // Accumulate Pagu for analysis
+                  for (let m = 0; m < 12; m++) {
+                      if (analysis.months[m][prefix]) {
+                        analysis.months[m][prefix].pagu += men;
+                      } else if (analysis.months[m]['OTHER']) {
+                        analysis.months[m]['OTHER'].pagu += men;
+                      }
+                  }
+
                   Object.entries(row.monthlyAllocation).forEach(([mStr, val]) => {
                       const m = parseInt(mStr);
                       const jmlReal = val.rpd || 0;
@@ -442,6 +464,14 @@ function App() {
                           totals.monthly[m].total += monthTotal;
                           totals.monthly[m].sp2d += sp2d;
                       }
+
+                      // Add to Analysis Breakdown
+                      const targetBucket = analysis.months[m][prefix] || analysis.months[m]['OTHER'];
+                      if (targetBucket) {
+                          targetBucket.rpd += jmlReal;
+                          targetBucket.sp2d += sp2d;
+                          targetBucket.realization += jmlAkan;
+                      }
                   });
               }
           });
@@ -451,11 +481,149 @@ function App() {
       totals.efficiency = totals.semula - totals.menjadi;
       totals.selisih = totals.semula - totals.menjadi;
 
-      return { grandTotals: totals };
+      return { grandTotals: totals, analysisData: analysis };
   }, [data]);
 
   const renderAnalysisTable = (index: number, type: 'month' | 'quarter') => {
-    return <div className="p-2 text-xs">Analisis Data (Lihat Kode Lengkap)</div>;
+    // Collect data
+    let aggregatedData = {
+        '51': { rpd: 0, sp2d: 0, realization: 0, pagu: 0 },
+        '52': { rpd: 0, sp2d: 0, realization: 0, pagu: 0 },
+        '53': { rpd: 0, sp2d: 0, realization: 0, pagu: 0 },
+        'OTHER': { rpd: 0, sp2d: 0, realization: 0, pagu: 0 }
+    };
+
+    let monthsToProcess: number[] = [];
+    if (type === 'month') {
+        monthsToProcess = [index];
+    } else {
+        monthsToProcess = QUARTERS[index].months;
+    }
+
+    monthsToProcess.forEach(m => {
+        const mData = analysisData.months[m];
+        if (!mData) return;
+        ['51', '52', '53', 'OTHER'].forEach(key => {
+            aggregatedData[key as keyof typeof aggregatedData].rpd += mData[key].rpd;
+            aggregatedData[key as keyof typeof aggregatedData].sp2d += mData[key].sp2d;
+            aggregatedData[key as keyof typeof aggregatedData].realization += mData[key].realization;
+        });
+    });
+
+    // Fix Pagu for Quarter (Take from first month, as Pagu is annual ceiling)
+    ['51', '52', '53', 'OTHER'].forEach(key => {
+         const firstMonth = monthsToProcess[0];
+         aggregatedData[key as keyof typeof aggregatedData].pagu = analysisData.months[firstMonth][key].pagu;
+    });
+
+    const isJan = type === 'month' && index === 0;
+
+    // Helper to calculate totals for a specific dataset
+    const calculateTotals = (data: typeof aggregatedData, valueExtractor: (d: any) => number) => {
+        const total = { rpd: 0, sp2d: 0, realization: 0, pagu: 0, targetValue: 0 };
+        Object.values(data).forEach(val => {
+            total.rpd += val.rpd;
+            total.sp2d += val.sp2d;
+            total.realization += val.realization;
+            total.pagu += val.pagu;
+            total.targetValue += valueExtractor(val);
+        });
+        return total;
+    };
+
+    const renderSingleTable = (title: string, valueExtractor: (d: any) => number, showOmSpan: boolean = true) => {
+        const totalRow = calculateTotals(aggregatedData, valueExtractor);
+
+        const renderRow = (label: string, data: { rpd: number, sp2d: number, realization: number, pagu: number }, isTotal = false) => {
+            const targetValue = valueExtractor(data);
+            const percentTarget = data.pagu > 0 ? (targetValue / data.pagu) * 100 : 0;
+            // Deviation for Analysis: Total Realization (SP2D + Realization?? No, usually Target vs Realization)
+            // Sticking to previous logic: Total Realization = SP2D + Realization (Akan)
+            // But for these split tables:
+            // Table 1 (Realisasi/RPD): Comparison is usually RPD vs Pagu? Or SP2D vs RPD?
+            // Let's use the generic logic: Deviation = (SP2D + Realization) - Target.
+            const totalRealization = data.sp2d + data.realization;
+            const deviation = totalRealization - targetValue;
+            
+            const marginMin = targetValue * 0.95;
+            const marginMax = targetValue * 1.05;
+
+            // Colors
+            const devColor = deviation !== 0 ? 'bg-red-500 text-white' : 'bg-green-100 text-green-800';
+            const textColorClass = isDarkMode ? 'text-gray-200' : 'text-gray-900';
+            const bgClass = isTotal 
+                ? (isDarkMode ? 'bg-gray-700' : 'bg-gray-100') 
+                : (isDarkMode ? 'bg-gray-800' : 'bg-white');
+
+            return (
+                <tr className={`${isTotal ? 'font-bold' : ''} ${bgClass} border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} ${textColorClass}`}>
+                    <td className="p-2 border-r text-left w-32 border-gray-300">{label}</td>
+                    <td className="p-2 border-r text-right w-28 border-gray-300">{formatCurrency(targetValue)}</td>
+                    <td className={`p-2 border-r text-right w-28 border-gray-300 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>{showOmSpan ? formatCurrency(data.sp2d) : '-'}</td>
+                    <td className="p-2 border-r text-right w-28 border-gray-300">{formatCurrency(data.pagu)}</td>
+                    <td className="p-2 border-r text-center w-16 border-gray-300">{percentTarget.toFixed(2)}%</td>
+                    
+                    {!isJan && (
+                        <>
+                            <td className="p-2 border-r text-right text-[10px] text-gray-500 w-24 border-gray-300 bg-gray-50">
+                                {formatCurrency(marginMin)}
+                            </td>
+                            <td className="p-2 border-r text-right text-[10px] text-gray-500 w-24 border-gray-300 bg-gray-50">
+                                {formatCurrency(marginMax)}
+                            </td>
+                            <td className="p-2 border-r text-right font-medium text-blue-700 w-28 border-gray-300">{formatCurrency(totalRealization)}</td>
+                            <td className={`p-2 text-right font-bold w-28 border-gray-300 ${devColor}`}>{formatCurrency(deviation)}</td>
+                        </>
+                    )}
+                </tr>
+            );
+        };
+
+        return (
+            <div className={`p-2 text-xs border rounded shadow-sm ${isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'}`}>
+                <div className={`font-bold mb-2 text-sm border-b pb-1 ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                    {title}
+                </div>
+                <table className="w-full text-xs border-collapse">
+                    <thead className={`${isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-200 text-gray-900'} font-bold`}>
+                        <tr>
+                            <th className="p-2 border border-gray-300 w-32">JENIS BELANJA</th>
+                            <th className="p-2 border border-gray-300">TARGET</th>
+                            <th className="p-2 border border-gray-300">OM SPAN</th>
+                            <th className="p-2 border border-gray-300">PAGU</th>
+                            <th className="p-2 border border-gray-300">% TARGET</th>
+                            {!isJan && (
+                                <>
+                                    <th className="p-2 border border-gray-300" colSpan={2}>MARGIN 5%</th>
+                                    <th className="p-2 border border-gray-300">REALISASI</th>
+                                    <th className="p-2 border border-gray-300">DEVIASI</th>
+                                </>
+                            )}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {renderRow('JUMLAH 51', aggregatedData['51'])}
+                        {renderRow('JUMLAH 52', aggregatedData['52'])}
+                        {renderRow('JUMLAH 53', aggregatedData['53'])}
+                        {renderRow('TOTAL', totalRow, true)}
+                    </tbody>
+                </table>
+            </div>
+        );
+    };
+
+    if (type === 'month') {
+        return (
+            <div className="flex flex-col gap-4">
+                 {renderSingleTable(`JUMLAH REALISASI: ${MONTH_NAMES[index]}`, (d) => d.rpd, true)}
+                 {renderSingleTable(`JUMLAH AKAN DIREALISASI: ${MONTH_NAMES[index]}`, (d) => d.realization, false)}
+                 {renderSingleTable(`TOTAL per Bulan: ${MONTH_NAMES[index]}`, (d) => d.rpd + d.realization, true)}
+            </div>
+        );
+    } else {
+        // Quarter View - Keep as single aggregate Total
+        return renderSingleTable(`TOTAL per Triwulan: ${QUARTERS[index].name}`, (d) => d.rpd + d.realization, true);
+    }
   };
 
   if (isLoading) {
@@ -505,6 +673,18 @@ function App() {
           </div>
       );
   }
+
+  // Style constants for footer cells - NO STICKY (Static positioning)
+  const footerCellClass = `border-r border-t border-gray-300 ${isDarkMode ? 'bg-gray-700 border-gray-500 text-gray-200' : 'bg-gray-200 border-gray-400 text-gray-800'} font-bold text-[11px]`;
+  // Updated: Sticky class for frozen columns in footer
+  const footerStickyCellClass = `${footerCellClass} sticky z-[40]`;
+  const footerFirstCellClass = `border-r border-t border-gray-300 px-2 h-10 align-middle w-[350px] min-w-[350px] max-w-[350px] ${isDarkMode ? 'bg-gray-700 border-gray-500 text-gray-200' : 'bg-gray-200 border-gray-400 text-gray-800'} font-bold sticky left-0 z-[40]`;
+  
+  // Regular classes for analysis row
+  const analysisCellClass = `border-r border-t border-gray-300 align-top ${isDarkMode ? 'bg-gray-900 border-gray-700' : 'bg-gray-50'}`;
+  // Updated: Sticky class for frozen columns in analysis
+  const analysisStickyCellClass = `${analysisCellClass} sticky z-[40]`;
+  const analysisFirstCellClass = `border-r border-t border-gray-300 px-2 h-10 align-middle w-[350px] min-w-[350px] max-w-[350px] sticky left-0 z-[40] ${isDarkMode ? 'bg-gray-900 border-gray-700' : 'bg-gray-50'}`;
 
   return (
     <div className={`h-screen flex ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-800'} font-sans overflow-hidden transition-colors duration-300`}>
@@ -578,18 +758,18 @@ function App() {
                     {showMenjadi && <th className="sticky z-[60] bg-yellow-600 text-white border-r border-b border-yellow-500 text-center" style={{ left: `${getMenjadiOffset()}px`, minWidth: `${menjadiWidth}px` }} colSpan={4} rowSpan={2}>MENJADI</th>}
                     {showSelisih && <th className="sticky z-[60] bg-orange-600 text-white border-r border-b border-orange-500 text-center" style={{ left: `${getSelisihOffset()}px`, minWidth: `${selisihWidth}px` }} colSpan={1} rowSpan={2}>SELISIH</th>}
                     {showEfisiensi && <th className="sticky z-[60] bg-emerald-600 text-white border-r border-b border-emerald-500 text-center" style={{ left: `${getEfisiensiOffset()}px`, minWidth: `${efisiensiWidth}px` }} colSpan={2} rowSpan={2}>EFISIENSI ANGGARAN</th>}
-                    {visibleQuarters.map((q, idx) => <th key={q.name} colSpan={(q.months.length * 8) + 3} className={`text-center border-r border-b border-gray-300 text-sm font-bold text-gray-900 ${idx % 2 === 0 ? 'bg-purple-100' : 'bg-blue-100'}`}>{q.name}</th>)}
+                    {visibleQuarters.map((q, idx) => <th key={q.name} colSpan={(q.months.length * 8) + 3} className={`text-center border-r border-b border-gray-300 text-sm font-bold ${isDarkMode ? 'bg-gray-700 text-gray-200' : 'text-gray-900'} ${idx % 2 === 0 ? (isDarkMode ? 'bg-purple-900/50' : 'bg-purple-100') : (isDarkMode ? 'bg-blue-900/50' : 'bg-blue-100')}`}>{q.name}</th>)}
                   </tr>
                   <tr className="h-10">
-                    {visibleQuarters.map((q, idx) => (<React.Fragment key={`months-${q.name}`}>{q.months.map(m => (<th key={m} colSpan={8} className="text-center border-r border-b border-gray-300 text-xs font-semibold bg-white p-1 text-gray-800">{MONTH_NAMES[m]}</th>))}<th rowSpan={2} className="bg-orange-100 border-r border-b border-gray-300 text-[10px] font-bold text-gray-800 w-[100px] align-middle px-1 leading-tight">TOTAL TARGET TW</th><th rowSpan={2} className="bg-orange-100 border-r border-b border-gray-300 text-[10px] font-bold text-gray-800 w-[100px] align-middle px-1 leading-tight">TOTAL REALISASI TW</th><th rowSpan={2} className="bg-orange-200 border-r border-b border-gray-300 text-[10px] font-bold text-gray-800 w-[100px] align-middle px-1 leading-tight">SISA TW</th></React.Fragment>))}
+                    {visibleQuarters.map((q, idx) => (<React.Fragment key={`months-${q.name}`}>{q.months.map(m => (<th key={m} colSpan={8} className={`text-center border-r border-b border-gray-300 text-xs font-semibold p-1 ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-white text-gray-800'}`}>{MONTH_NAMES[m]}</th>))}<th rowSpan={2} className={`border-r border-b border-gray-300 text-[10px] font-bold w-[100px] align-middle px-1 leading-tight ${isDarkMode ? 'bg-orange-900/50 text-gray-300' : 'bg-orange-100 text-gray-800'}`}>TOTAL TARGET TW</th><th rowSpan={2} className={`border-r border-b border-gray-300 text-[10px] font-bold w-[100px] align-middle px-1 leading-tight ${isDarkMode ? 'bg-orange-900/50 text-gray-300' : 'bg-orange-100 text-gray-800'}`}>TOTAL REALISASI TW</th><th rowSpan={2} className={`border-r border-b border-gray-300 text-[10px] font-bold w-[100px] align-middle px-1 leading-tight ${isDarkMode ? 'bg-orange-800/50 text-gray-300' : 'bg-orange-200 text-gray-800'}`}>SISA TW</th></React.Fragment>))}
                   </tr>
                   <tr className="h-8">
                      {/* Subheaders */}
-                     {showSemula && <><th className="sticky z-[60] bg-gray-200 text-gray-700 border-r border-b border-gray-300 text-xs p-1" style={{ left: `${getSemulaOffset()}px`, width: `${volValWidth + volUnitWidth}px` }} colSpan={2}>Vol</th><th className="sticky z-[60] bg-gray-200 text-gray-700 border-r border-b border-gray-300 text-xs p-1" style={{ left: `${getSemulaOffset() + volValWidth + volUnitWidth}px`, width: `${priceWidth}px` }}>Harga</th><th className="sticky z-[60] bg-gray-200 text-gray-700 border-r border-b border-gray-300 text-xs p-1" style={{ left: `${getSemulaOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${totalWidth}px` }}>Total</th></>}
-                     {showMenjadi && <><th className="sticky z-[60] bg-yellow-100 text-gray-800 border-r border-b border-gray-300 text-xs p-1" style={{ left: `${getMenjadiOffset()}px`, width: `${volValWidth + volUnitWidth}px` }} colSpan={2}>Vol</th><th className="sticky z-[60] bg-yellow-100 text-gray-800 border-r border-b border-gray-300 text-xs p-1" style={{ left: `${getMenjadiOffset() + volValWidth + volUnitWidth}px`, width: `${priceWidth}px` }}>Harga</th><th className="sticky z-[60] bg-yellow-100 text-gray-800 border-r border-b border-gray-300 text-xs p-1" style={{ left: `${getMenjadiOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${totalWidth}px` }}>Total</th></>}
-                     {showSelisih && <th className="sticky z-[60] bg-orange-100 text-gray-800 border-r border-b border-gray-300 text-xs p-1" style={{ left: `${getSelisihOffset()}px`, width: `${selisihWidth}px` }}>Nilai</th>}
-                     {showEfisiensi && <><th className="sticky z-[60] bg-emerald-100 text-gray-800 border-r border-b border-gray-300 text-xs p-1" style={{ left: `${getEfisiensiOffset()}px`, width: '90px' }}>Rincian</th><th className="sticky z-[60] bg-emerald-100 text-gray-800 border-r border-b border-gray-300 text-xs p-1" style={{ left: `${getEfisiensiOffset() + 90}px`, width: '90px' }}>Total</th></>}
-                     {visibleQuarters.map(q => q.months.map(m => (<React.Fragment key={`headers-${m}`}><th className="bg-pink-100 border-r border-b border-gray-300 text-[9px] min-w-[80px] font-normal px-1 text-gray-800">Jml Realisasi</th><th className="bg-pink-100 border-r border-b border-gray-300 text-[9px] min-w-[80px] font-normal px-1 text-gray-800">Jml Akan Real</th><th className="bg-pink-200 border-r border-b border-gray-300 text-[9px] min-w-[90px] font-bold px-1 text-gray-800">TOTAL</th><th className="bg-purple-100 border-r border-b border-gray-300 text-[9px] min-w-[70px] font-normal px-1 text-gray-800">Tgl</th><th className="bg-purple-100 border-r border-b border-gray-300 text-[9px] min-w-[90px] font-normal px-1 text-gray-800">No. SPM</th><th className="bg-cyan-100 border-r border-b border-gray-300 text-[9px] min-w-[30px] font-normal px-1 text-gray-800">Cek</th><th className="bg-green-100 border-r border-b border-gray-300 text-[9px] min-w-[90px] font-normal px-1 text-gray-800">SP2D</th><th className="bg-red-100 border-r border-b border-gray-300 text-[9px] min-w-[90px] font-normal px-1 text-gray-800">Selisih</th></React.Fragment>)))}
+                     {showSemula && <><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`} style={{ left: `${getSemulaOffset()}px`, width: `${volValWidth + volUnitWidth}px` }} colSpan={2}>Vol</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`} style={{ left: `${getSemulaOffset() + volValWidth + volUnitWidth}px`, width: `${priceWidth}px` }}>Harga</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`} style={{ left: `${getSemulaOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${totalWidth}px` }}>Total</th></>}
+                     {showMenjadi && <><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-yellow-900/50 text-gray-300' : 'bg-yellow-100 text-gray-800'}`} style={{ left: `${getMenjadiOffset()}px`, width: `${volValWidth + volUnitWidth}px` }} colSpan={2}>Vol</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-yellow-900/50 text-gray-300' : 'bg-yellow-100 text-gray-800'}`} style={{ left: `${getMenjadiOffset() + volValWidth + volUnitWidth}px`, width: `${priceWidth}px` }}>Harga</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-yellow-900/50 text-gray-300' : 'bg-yellow-100 text-gray-800'}`} style={{ left: `${getMenjadiOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${totalWidth}px` }}>Total</th></>}
+                     {showSelisih && <th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-orange-900/50 text-gray-300' : 'bg-orange-100 text-gray-800'}`} style={{ left: `${getSelisihOffset()}px`, width: `${selisihWidth}px` }}>Nilai</th>}
+                     {showEfisiensi && <><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-emerald-900/50 text-gray-300' : 'bg-emerald-100 text-gray-800'}`} style={{ left: `${getEfisiensiOffset()}px`, width: '90px' }}>Rincian</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-emerald-900/50 text-gray-300' : 'bg-emerald-100 text-gray-800'}`} style={{ left: `${getEfisiensiOffset() + 90}px`, width: '90px' }}>Total</th></>}
+                     {visibleQuarters.map(q => q.months.map(m => (<React.Fragment key={`headers-${m}`}><th className={`border-r border-b border-gray-300 text-[9px] min-w-[80px] font-normal px-1 ${isDarkMode ? 'bg-pink-900/50 text-gray-300' : 'bg-pink-100 text-gray-800'}`}>Jml Realisasi</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[80px] font-normal px-1 ${isDarkMode ? 'bg-pink-900/50 text-gray-300' : 'bg-pink-100 text-gray-800'}`}>Jml Akan Real</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[90px] font-bold px-1 ${isDarkMode ? 'bg-pink-800/50 text-gray-300' : 'bg-pink-200 text-gray-800'}`}>TOTAL</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[70px] font-normal px-1 ${isDarkMode ? 'bg-purple-900/50 text-gray-300' : 'bg-purple-100 text-gray-800'}`}>Tgl</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[90px] font-normal px-1 ${isDarkMode ? 'bg-purple-900/50 text-gray-300' : 'bg-purple-100 text-gray-800'}`}>No. SPM</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[30px] font-normal px-1 ${isDarkMode ? 'bg-cyan-900/50 text-gray-300' : 'bg-cyan-100 text-gray-800'}`}>Cek</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[90px] font-normal px-1 ${isDarkMode ? 'bg-green-900/50 text-gray-300' : 'bg-green-100 text-gray-800'}`}>SP2D</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[90px] font-normal px-1 ${isDarkMode ? 'bg-red-900/50 text-gray-300' : 'bg-red-100 text-gray-800'}`}>Selisih</th></React.Fragment>)))}
                   </tr>
                 </thead>
 
@@ -630,48 +810,56 @@ function App() {
 
                 {/* Footer and Analysis Row */}
                 <tfoot>
-                    <tr className="bg-gray-200 border-t-2 border-gray-400 font-bold text-[11px] text-gray-800">
-                        {/* Footer Content */}
-                        <td className="sticky left-0 z-[60] bg-gray-200 border-r border-b border-gray-400 p-0 h-10 w-[350px] min-w-[350px] max-w-[350px]" style={{ width: '350px', minWidth: '350px', maxWidth: '350px' }}>
+                    <tr className={`${isDarkMode ? 'bg-gray-700 border-gray-500' : 'bg-gray-200 border-gray-400'} border-t-2 font-bold text-[11px] ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                        {/* Footer Content - STATIC POSITION (No Sticky) */}
+                        <td className={footerFirstCellClass} style={{ width: '350px', minWidth: '350px', maxWidth: '350px' }}>
                            <div className="flex items-center h-full px-2 w-full">TOTAL KESELURUHAN</div>
                         </td>
-                        {showSemula && (<><td className="sticky z-[60] bg-gray-300 border-r border-b border-gray-400" style={{ left: `${getSemulaOffset()}px`, width: `${volValWidth}px` }}></td><td className="sticky z-[60] bg-gray-300 border-r border-b border-gray-400" style={{ left: `${getSemulaOffset() + volValWidth}px`, width: `${volUnitWidth}px` }}></td><td className="sticky z-[60] bg-gray-300 border-r border-b border-gray-400" style={{ left: `${getSemulaOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${priceWidth}px` }}></td><td className="sticky z-[60] bg-gray-200 border-r border-b border-gray-400 text-right px-1" style={{ left: `${getSemulaOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${totalWidth}px` }}>{formatCurrency(grandTotals.semula)}</td></>)}
-                        {showMenjadi && (<><td className="sticky z-[60] bg-gray-300 border-r border-b border-gray-400" style={{ left: `${getMenjadiOffset()}px`, width: `${volValWidth}px` }}></td><td className="sticky z-[60] bg-gray-300 border-r border-b border-gray-400" style={{ left: `${getMenjadiOffset() + volValWidth}px`, width: `${volUnitWidth}px` }}></td><td className="sticky z-[60] bg-gray-300 border-r border-b border-gray-400" style={{ left: `${getMenjadiOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${priceWidth}px` }}></td><td className="sticky z-[60] bg-gray-200 border-r border-b border-gray-400 text-right px-1" style={{ left: `${getMenjadiOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${totalWidth}px` }}>{formatCurrency(grandTotals.menjadi)}</td></>)}
-                        {showSelisih && <td className="sticky z-[60] bg-gray-200 border-r border-b border-gray-400 text-right px-1" style={{ left: `${getSelisihOffset()}px`, width: `${selisihWidth}px` }}>{formatCurrency(grandTotals.selisih)}</td>}
-                        {showEfisiensi && (<><td className="sticky z-[60] bg-gray-200 border-r border-b border-gray-400 text-right px-1" style={{ left: `${getEfisiensiOffset()}px`, width: '90px' }}>{formatCurrency(grandTotals.efficiency)}</td><td className="sticky z-[60] bg-gray-200 border-r border-b border-gray-400 text-right px-1" style={{ left: `${getEfisiensiOffset() + 90}px`, width: '90px' }}>{formatCurrency(grandTotals.efficiency)}</td></>)}
+                        {showSemula && (<><td className={footerStickyCellClass} style={{ left: `${getSemulaOffset()}px`, width: `${volValWidth}px` }}></td><td className={footerStickyCellClass} style={{ left: `${getSemulaOffset() + volValWidth}px`, width: `${volUnitWidth}px` }}></td><td className={footerStickyCellClass} style={{ left: `${getSemulaOffset() + volValWidth + volUnitWidth}px`, width: `${priceWidth}px` }}></td><td className={`text-right px-1 ${footerStickyCellClass}`} style={{ left: `${getSemulaOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${totalWidth}px` }}>{formatCurrency(grandTotals.semula)}</td></>)}
+                        {showMenjadi && (<><td className={footerStickyCellClass} style={{ left: `${getMenjadiOffset()}px`, width: `${volValWidth}px` }}></td><td className={footerStickyCellClass} style={{ left: `${getMenjadiOffset() + volValWidth}px`, width: `${volUnitWidth}px` }}></td><td className={footerStickyCellClass} style={{ left: `${getMenjadiOffset() + volValWidth + volUnitWidth}px`, width: `${priceWidth}px` }}></td><td className={`text-right px-1 ${footerStickyCellClass}`} style={{ left: `${getMenjadiOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${totalWidth}px` }}>{formatCurrency(grandTotals.menjadi)}</td></>)}
+                        {showSelisih && <td className={`text-right px-1 ${footerStickyCellClass}`} style={{ left: `${getSelisihOffset()}px`, width: `${selisihWidth}px` }}>{formatCurrency(grandTotals.selisih)}</td>}
+                        {showEfisiensi && (<><td className={`text-right px-1 ${footerStickyCellClass}`} style={{ left: `${getEfisiensiOffset()}px`, width: '90px' }}>{formatCurrency(grandTotals.efficiency)}</td><td className={`text-right px-1 ${footerStickyCellClass}`} style={{ left: `${getEfisiensiOffset() + 90}px`, width: '90px' }}>{formatCurrency(grandTotals.efficiency)}</td></>)}
                         {visibleQuarters.map(q => {
                              let qRpd = 0; let qReal = 0;
-                             return (<React.Fragment key={`total-q-${q.name}`}>{q.months.map(m => {const mData = grandTotals.monthly[m];const gap = mData.total - mData.sp2d;qRpd += mData.rpd; qReal += mData.realization;return (<React.Fragment key={`total-m-${m}`}><td className="border-r border-b border-gray-400 text-right px-1">{formatCurrency(mData.rpd)}</td><td className="border-r border-b border-gray-400 text-right px-1">{formatCurrency(mData.realization)}</td><td className="border-r border-b border-gray-400 text-right px-1 font-bold bg-pink-50">{formatCurrency(mData.total)}</td><td className="border-r border-b border-gray-400 bg-gray-300"></td><td className="border-r border-b border-gray-400 bg-gray-300"></td><td className="border-r border-b border-gray-400 bg-gray-300"></td><td className="border-r border-b border-gray-400 text-right px-1">{formatCurrency(mData.sp2d)}</td><td className={`border-r border-b border-gray-400 text-right px-1 ${gap !== 0 ? 'text-red-600' : ''}`}>{formatCurrency(gap)}</td></React.Fragment>)})}<td className="bg-orange-200 border-r border-b border-gray-400 text-right px-1 font-bold">{formatCurrency(qRpd)}</td><td className="bg-orange-200 border-r border-b border-gray-400 text-right px-1 font-bold">{formatCurrency(qReal)}</td><td className={`bg-orange-200 border-r border-b border-gray-400 text-right px-1 font-bold ${(qRpd - qReal) !== 0 ? 'text-red-600' : 'text-green-700'}`}>{formatCurrency(qRpd - qReal)}</td></React.Fragment>)
+                             return (<React.Fragment key={`total-q-${q.name}`}>{q.months.map(m => {const mData = grandTotals.monthly[m];const gap = mData.total - mData.sp2d;qRpd += mData.rpd; qReal += mData.realization;return (<React.Fragment key={`total-m-${m}`}><td className={footerCellClass + " text-right px-1"}>{formatCurrency(mData.rpd)}</td><td className={footerCellClass + " text-right px-1"}>{formatCurrency(mData.realization)}</td><td className={footerCellClass + ` text-right px-1 font-bold ${isDarkMode ? 'bg-pink-900/50' : 'bg-pink-50'}`}>{formatCurrency(mData.total)}</td><td className={footerCellClass}></td><td className={footerCellClass}></td><td className={footerCellClass}></td><td className={footerCellClass + " text-right px-1"}>{formatCurrency(mData.sp2d)}</td><td className={footerCellClass + ` text-right px-1 ${gap !== 0 ? 'text-red-600' : ''}`}>{formatCurrency(gap)}</td></React.Fragment>)})}<td className={footerCellClass + ` text-right px-1 font-bold ${isDarkMode ? 'bg-orange-900/50' : 'bg-orange-200'}`}>{formatCurrency(qRpd)}</td><td className={footerCellClass + ` text-right px-1 font-bold ${isDarkMode ? 'bg-orange-900/50' : 'bg-orange-200'}`}>{formatCurrency(qReal)}</td><td className={footerCellClass + ` text-right px-1 font-bold ${isDarkMode ? 'bg-orange-900/50' : 'bg-orange-200'} ${(qRpd - qReal) !== 0 ? 'text-red-600' : 'text-green-700'}`}>{formatCurrency(qRpd - qReal)}</td></React.Fragment>)
                         })}
                     </tr>
                     
-                    {/* Collapsible Analysis Row */}
-                    <tr className="bg-gray-100 border-t border-gray-300">
-                        <td className="sticky left-0 z-[60] bg-gray-100 border-r border-b border-gray-300 px-2 h-10 align-middle w-[350px] min-w-[350px] max-w-[350px]" style={{ width: '350px', minWidth: '350px', maxWidth: '350px' }}>
-                           <span className="font-bold text-gray-700 text-xs">ANALISIS BULANAN (OM SPAN)</span>
+                    {/* Collapsible Analysis Row (NOT Sticky) */}
+                    <tr className={`${isDarkMode ? 'bg-gray-800' : 'bg-gray-100'} border-t border-gray-300`}>
+                        <td className={analysisFirstCellClass} style={{ width: '350px', minWidth: '350px', maxWidth: '350px' }}>
+                           <span className={`font-bold text-xs ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>ANALISIS BULANAN (OM SPAN)</span>
                         </td>
-                        {showSemula && <td colSpan={4} className="sticky z-[60] border-r border-b border-gray-300 bg-gray-100" style={{ left: `${getSemulaOffset()}px`, minWidth: `${semulaWidth}px` }}></td>}
-                        {showMenjadi && <td colSpan={4} className="sticky z-[60] border-r border-b border-gray-300 bg-gray-100" style={{ left: `${getMenjadiOffset()}px`, minWidth: `${menjadiWidth}px` }}></td>}
-                        {showSelisih && <td colSpan={1} className="sticky z-[60] border-r border-b border-gray-300 bg-gray-100" style={{ left: `${getSelisihOffset()}px`, minWidth: `${selisihWidth}px` }}></td>}
-                        {showEfisiensi && <td colSpan={2} className="sticky z-[60] border-r border-b border-gray-300 bg-gray-100" style={{ left: `${getEfisiensiOffset()}px`, minWidth: `${efisiensiWidth}px` }}></td>}
+                        {showSemula && <td colSpan={4} className={analysisStickyCellClass} style={{ left: `${getSemulaOffset()}px`, minWidth: `${semulaWidth}px` }}></td>}
+                        {showMenjadi && <td colSpan={4} className={analysisStickyCellClass} style={{ left: `${getMenjadiOffset()}px`, minWidth: `${menjadiWidth}px` }}></td>}
+                        {showSelisih && <td colSpan={1} className={analysisStickyCellClass} style={{ left: `${getSelisihOffset()}px`, minWidth: `${selisihWidth}px` }}></td>}
+                        {showEfisiensi && <td colSpan={2} className={analysisStickyCellClass} style={{ left: `${getEfisiensiOffset()}px`, minWidth: `${efisiensiWidth}px` }}></td>}
                          {visibleQuarters.map((q, qIndex) => (
                              <React.Fragment key={`analysis-q-${q.name}`}>
                                  {q.months.map(m => (
-                                     <td key={`analysis-m-${m}`} colSpan={8} className="border-r border-b border-gray-300 bg-gray-50 align-top p-0 relative">
-                                        <div className="w-full">
-                                            <button onClick={() => toggleMonthAnalysis(m)} className={`w-full flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase transition-colors ${expandedAnalysisMonths.includes(m) ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                                     <td key={`analysis-m-${m}`} colSpan={8} className={analysisCellClass}>
+                                        <div className="w-full relative">
+                                            <button onClick={() => toggleMonthAnalysis(m)} className={`w-full flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase transition-colors ${isDarkMode ? (expandedAnalysisMonths.includes(m) ? 'bg-blue-900/50 text-blue-300' : 'bg-gray-800 text-gray-400 hover:bg-gray-700') : (expandedAnalysisMonths.includes(m) ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}`}>
                                                 <span>Analisis {MONTH_NAMES[m]}</span>{expandedAnalysisMonths.includes(m) ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
                                             </button>
-                                            {expandedAnalysisMonths.includes(m) && <div className="p-1 animate-in fade-in slide-in-from-top-2 duration-200">{renderAnalysisTable(m, 'month')}</div>}
+                                            {expandedAnalysisMonths.includes(m) && (
+                                                <div className="absolute top-full left-0 right-0 p-1 animate-in fade-in slide-in-from-top-2 duration-200 z-[80] shadow-lg rounded-b-lg bg-transparent min-w-[500px]">
+                                                    {renderAnalysisTable(m, 'month')}
+                                                </div>
+                                            )}
                                          </div>
                                      </td>
                                  ))}
-                                 <td colSpan={3} className="border-r border-b border-gray-300 bg-gray-100 align-top p-0 relative">
-                                    <div className="w-full">
-                                        <button onClick={() => toggleQuarterAnalysis(qIndex)} className={`w-full flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase transition-colors ${expandedAnalysisQuarters.includes(qIndex) ? 'bg-orange-100 text-orange-800' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+                                 <td colSpan={3} className={analysisCellClass}>
+                                    <div className="w-full relative">
+                                        <button onClick={() => toggleQuarterAnalysis(qIndex)} className={`w-full flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase transition-colors ${isDarkMode ? (expandedAnalysisQuarters.includes(qIndex) ? 'bg-orange-900/50 text-orange-300' : 'bg-gray-800 text-gray-400 hover:bg-gray-700') : (expandedAnalysisQuarters.includes(qIndex) ? 'bg-orange-100 text-orange-800' : 'bg-gray-200 text-gray-700 hover:bg-gray-300')}`}>
                                             <span>Analisis {q.name}</span>{expandedAnalysisQuarters.includes(qIndex) ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
                                         </button>
-                                        {expandedAnalysisQuarters.includes(qIndex) && <div className="p-1 animate-in fade-in slide-in-from-top-2 duration-200 absolute right-0 z-[60] shadow-lg bg-white border border-gray-300 min-w-[500px]">{renderAnalysisTable(qIndex, 'quarter')}</div>}
+                                        {expandedAnalysisQuarters.includes(qIndex) && (
+                                            <div className="absolute top-full right-0 p-1 animate-in fade-in slide-in-from-top-2 duration-200 z-[80] shadow-lg bg-white border border-gray-300 min-w-[500px] rounded-b-lg">
+                                                {renderAnalysisTable(qIndex, 'quarter')}
+                                            </div>
+                                        )}
                                      </div>
                                  </td>
                              </React.Fragment>

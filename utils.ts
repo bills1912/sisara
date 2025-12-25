@@ -1,4 +1,5 @@
 
+
 import { BudgetRow, ChangeStatus, MonthlyAllocation, ThemeConfig, RowType } from './types';
 
 export const formatCurrency = (value: number) => {
@@ -96,6 +97,18 @@ export const getRowBaseColor = (type: string, isDarkMode: boolean): string => {
         case RowType.RO: return 'bg-amber-50'; // Pastel Yellow
         case RowType.HEADER_ACCOUNT: return 'bg-gray-100 font-bold text-gray-600';
         default: return 'bg-white';
+    }
+};
+
+export const getRowBaseColorHex = (type: string, isDarkMode: boolean): string => {
+    if (isDarkMode) return '#1f2937'; // gray-800
+    
+    switch (type) {
+        case RowType.PROGRAM: return '#eff6ff'; // blue-50
+        case RowType.KRO: return '#ecfdf5'; // emerald-50
+        case RowType.RO: return '#fffbeb'; // amber-50
+        case RowType.HEADER_ACCOUNT: return '#f3f4f6'; // gray-100
+        default: return '#ffffff'; // white
     }
 };
 
