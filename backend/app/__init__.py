@@ -1,1 +1,0 @@
-# SISARA Backend Application

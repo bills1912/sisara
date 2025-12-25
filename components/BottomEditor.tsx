@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { BudgetRow, MonthlyDetail } from '../types';
 import { X, Save, Calendar, FileText, CheckCircle, Hash } from 'lucide-react';
@@ -99,7 +100,7 @@ const BottomEditor: React.FC<BottomEditorProps> = ({ row, section, monthIndex, o
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-5px_20px_rgba(0,0,0,0.15)] z-[60] border-t border-gray-200 animate-in slide-in-from-bottom duration-300 text-gray-900">
+    <div className="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-5px_20px_rgba(0,0,0,0.15)] z-[90] border-t border-gray-200 animate-in slide-in-from-bottom duration-300 text-gray-900">
       <div className="max-w-7xl mx-auto flex flex-col h-[350px] md:h-auto">
         
         {/* Header */}

@@ -8,14 +8,24 @@ interface SidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onOpenMasterData: () => void;
+  isDarkMode: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isCollapsed, onToggleCollapse, onOpenMasterData }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isCollapsed, onToggleCollapse, onOpenMasterData, isDarkMode }) => {
+  // Dynamic styling based on theme
+  const bgClass = isDarkMode ? 'bg-slate-900' : 'bg-white';
+  const textClass = isDarkMode ? 'text-white' : 'text-slate-800';
+  const borderClass = isDarkMode ? 'border-slate-700' : 'border-gray-200';
+  
+  const hoverClass = isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-blue-50';
+  const activeClass = isDarkMode ? 'bg-slate-800 border-blue-500' : 'bg-blue-50 text-blue-700 border-blue-600';
+  const inactiveClass = `border-transparent ${hoverClass}`;
+
   return (
     <div 
-        className={`${isCollapsed ? 'w-16' : 'w-64'} bg-slate-900 text-white flex flex-col flex-shrink-0 transition-all duration-300 relative`}
+        className={`${isCollapsed ? 'w-16' : 'w-64'} ${bgClass} ${textClass} border-r ${borderClass} flex flex-col flex-shrink-0 transition-all duration-300 relative z-[90]`}
     >
-      <div className={`h-16 flex items-center ${isCollapsed ? 'justify-center' : 'px-6'} border-b border-slate-700 transition-all overflow-hidden`}>
+      <div className={`h-16 flex items-center ${isCollapsed ? 'justify-center' : 'px-6'} border-b ${borderClass} transition-all overflow-hidden`}>
         <img 
             src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiid729XCN4McOXC1qUo4EU9g_375Xlq33M3_a3c1Zg26o_F4rI9pQ6r5qC-rX5_b8qZ1oP7rK3sT5uV9wX8yA4bB2cD3eF4gH5iJ6kL7mN8oO9pQ0rS1tU2vW3x/s1600/logo-s-gold.png" 
             alt="Logo SISARA" 
@@ -27,7 +37,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isCollapse
       <nav className="flex-1 py-4 overflow-hidden">
         <button 
           onClick={() => onChangeView('table')}
-          className={`w-full flex items-center px-4 py-4 hover:bg-slate-800 transition-colors ${currentView === 'table' ? 'bg-slate-800 border-l-4 border-blue-500' : 'border-l-4 border-transparent'}`}
+          className={`w-full flex items-center px-4 py-4 transition-colors border-l-4 ${currentView === 'table' ? activeClass : inactiveClass}`}
           title="Tabel Utama"
         >
           <Table size={20} className="flex-shrink-0" />
@@ -36,7 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isCollapse
         
         <button 
           onClick={() => onChangeView('settings')}
-          className={`w-full flex items-center px-4 py-4 hover:bg-slate-800 transition-colors ${currentView === 'settings' ? 'bg-slate-800 border-l-4 border-blue-500' : 'border-l-4 border-transparent'}`}
+          className={`w-full flex items-center px-4 py-4 transition-colors border-l-4 ${currentView === 'settings' ? activeClass : inactiveClass}`}
           title="Pengaturan Warna"
         >
           <Palette size={20} className="flex-shrink-0" />
@@ -45,7 +55,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isCollapse
 
         <button 
           onClick={onOpenMasterData}
-          className={`w-full flex items-center px-4 py-4 hover:bg-slate-800 transition-colors border-l-4 border-transparent text-gray-300 hover:text-white`}
+          className={`w-full flex items-center px-4 py-4 transition-colors border-l-4 border-transparent ${hoverClass} ${isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-600 hover:text-blue-700'}`}
           title="Master Data"
         >
           <Database size={20} className="flex-shrink-0" />
@@ -55,12 +65,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isCollapse
 
       <button 
         onClick={onToggleCollapse}
-        className="absolute -right-3 top-20 bg-blue-600 rounded-full p-1 text-white shadow-md hover:bg-blue-500 z-50 border border-slate-900"
+        className={`absolute -right-3 top-20 bg-blue-600 rounded-full p-1 text-white shadow-md hover:bg-blue-500 z-50 border ${isDarkMode ? 'border-slate-900' : 'border-white'}`}
       >
         {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
-      <div className={`p-4 border-t border-slate-700 text-xs text-slate-400 ${isCollapsed ? 'text-center' : ''}`}>
+      <div className={`p-4 border-t ${borderClass} text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-400'} ${isCollapsed ? 'text-center' : ''}`}>
         {!isCollapsed ? 'v1.0.2' : 'v1'}
       </div>
     </div>
