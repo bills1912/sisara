@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
-from typing import List, Optional
+from typing import List, Optional, Union
 from app.models.schemas import (
     BudgetRowCreate,
     BudgetRowUpdate,
@@ -30,12 +30,25 @@ async def get_budget_row(row_id: str):
     return row
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_budget_row(
+@router.post("/")
+async def save_budget_data(data: List[BudgetRowResponse]):
+    """
+    Save/sync all budget data.
+    Accepts array of budget rows with nested children - replaces all existing data.
+    """
+    result = await budget_service.sync_all(data)
+    return {
+        "message": "Budget data saved successfully",
+        "count": result
+    }
+
+
+@router.post("/create", status_code=status.HTTP_201_CREATED)
+async def create_single_budget_row(
     row_data: BudgetRowCreate,
     parent_id: Optional[str] = None
 ):
-    """Create a new budget row (optionally under a parent)."""
+    """Create a single new budget row (optionally under a parent)."""
     row_id = await budget_service.create_row(row_data, parent_id)
     return {"id": row_id, "message": "Budget row created successfully"}
 
@@ -50,6 +63,19 @@ async def add_child_row(parent_id: str, row_data: BudgetRowCreate):
             detail=f"Parent row with ID {parent_id} not found"
         )
     return {"id": row_id, "message": "Child row added successfully"}
+
+
+@router.put("/sync")
+async def sync_all_budget_data(data: List[BudgetRowResponse]):
+    """
+    Sync all budget data - replaces existing data with new tree structure.
+    Accepts array of budget rows with nested children.
+    """
+    result = await budget_service.sync_all(data)
+    return {
+        "message": "Budget data synced successfully",
+        "count": result
+    }
 
 
 @router.put("/{row_id}")

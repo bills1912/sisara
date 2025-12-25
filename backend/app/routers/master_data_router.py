@@ -23,9 +23,22 @@ async def get_master_data_by_type(row_type: RowType):
     return await master_data_service.get_by_type(row_type)
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_master_data(data: MasterDataCreate):
-    """Create a new master data item."""
+@router.post("/")
+async def save_master_data(data: Dict[str, List[MasterDataItem]]):
+    """
+    Save/sync all master data.
+    Accepts format: { "KRO": [...], "RO": [...], ... } - replaces all existing data.
+    """
+    result = await master_data_service.sync_all(data)
+    return {
+        "message": "Master data saved successfully",
+        "counts": result
+    }
+
+
+@router.post("/create", status_code=status.HTTP_201_CREATED)
+async def create_single_master_data(data: MasterDataCreate):
+    """Create a single new master data item."""
     doc_id = await master_data_service.create(data)
     return {"id": doc_id, "message": "Master data created successfully"}
 
@@ -35,6 +48,19 @@ async def bulk_create_master_data(items: List[MasterDataCreate]):
     """Bulk create master data items."""
     count = await master_data_service.bulk_create(items)
     return {"count": count, "message": f"{count} master data items created"}
+
+
+@router.put("/sync")
+async def sync_all_master_data(data: Dict[str, List[MasterDataItem]]):
+    """
+    Sync all master data - replaces existing data with new data.
+    Accepts format: { "KRO": [...], "RO": [...], ... }
+    """
+    result = await master_data_service.sync_all(data)
+    return {
+        "message": "Master data synced successfully",
+        "counts": result
+    }
 
 
 @router.delete("/{row_type}/{code}")
