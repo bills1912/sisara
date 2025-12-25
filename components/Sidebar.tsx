@@ -27,7 +27,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isCollapse
     >
       <div className={`h-16 flex items-center ${isCollapsed ? 'justify-center' : 'px-6'} border-b ${borderClass} transition-all overflow-hidden`}>
         <img 
-            src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiid729XCN4McOXC1qUo4EU9g_375Xlq33M3_a3c1Zg26o_F4rI9pQ6r5qC-rX5_b8qZ1oP7rK3sT5uV9wX8yA4bB2cD3eF4gH5iJ6kL7mN8oO9pQ0rS1tU2vW3x/s1600/logo-s-gold.png" 
+            src="assets/images/logo.png" 
             alt="Logo SISARA" 
             className="h-10 w-auto object-contain flex-shrink-0"
         />
