@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 from enum import Enum
 from bson import ObjectId
+from datetime import datetime
 
 
 class PyObjectId(str):
@@ -158,6 +159,20 @@ class BudgetRowResponse(BaseModel):
 class MasterDataResponse(BaseModel):
     type: RowType
     items: List[MasterDataItem]
+
+class RevisionBase(BaseModel):
+    note: str
+    timestamp: datetime = Field(default_factory=datetime.now)
+
+class RevisionCreate(RevisionBase):
+    data: List[BudgetRowResponse] # Menyimpan seluruh tree anggaran
+
+class RevisionResponse(RevisionBase):
+    id: str
+    # Kita tidak mengembalikan 'data' saat listing agar ringan
+    
+class RevisionDetailResponse(RevisionResponse):
+    data: List[BudgetRowResponse]
 
 
 # Fix forward references
