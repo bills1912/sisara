@@ -21,6 +21,7 @@ class PyObjectId(str):
 
 
 class RowType(str, Enum):
+    SATKER = "SATKER"
     PROGRAM = "PROGRAM"
     ACTIVITY = "ACTIVITY"  # Klasifikasi Rincian Output
     KRO = "KRO"    # Rincian Output
@@ -28,6 +29,7 @@ class RowType(str, Enum):
     COMPONENT = "COMPONENT"
     SUBCOMPONENT = "SUBCOMPONENT"
     ACCOUNT = "ACCOUNT"
+    DETAIL = "DETAIL"
 
 
 class ChangeStatus(str, Enum):
