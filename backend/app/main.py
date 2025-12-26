@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.database import connect_to_database, close_database_connection
-from app.routers import budget_router, master_data_router, theme_router
+from app.routers import budget_router, master_data_router, theme_router, revision_router
 
 
 @asynccontextmanager
@@ -51,7 +51,7 @@ app.add_middleware(
 app.include_router(budget_router)
 app.include_router(master_data_router)
 app.include_router(theme_router)
-
+app.include_router(revision_router)
 
 @app.get("/")
 async def root():
