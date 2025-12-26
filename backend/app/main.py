@@ -32,6 +32,7 @@ ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+    "https://sisara.onrender.com",
     # Add your Render/Vercel/Netlify frontend URLs here
     "https://*.onrender.com",
     "https://*.vercel.app",
