@@ -22,12 +22,12 @@ class PyObjectId(str):
 
 class RowType(str, Enum):
     PROGRAM = "PROGRAM"
-    KRO = "KRO"  # Klasifikasi Rincian Output
-    RO = "RO"    # Rincian Output
+    ACTIVITY = "ACTIVITY"  # Klasifikasi Rincian Output
+    KRO = "KRO"    # Rincian Output
+    RO = "RO"
     COMPONENT = "COMPONENT"
     SUBCOMPONENT = "SUBCOMPONENT"
-    HEADER_ACCOUNT = "HEADER_ACCOUNT"
-    ITEM = "ITEM"
+    ACCOUNT = "ACCOUNT"
 
 
 class ChangeStatus(str, Enum):
