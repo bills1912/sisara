@@ -15,6 +15,10 @@ from app.models.schemas import (
     MasterDataResponse,
     ThemeConfig,
     ThemeConfigDocument,
+    RevisionBase,
+    RevisionCreate,
+    RevisionResponse,
+    RevisionDetailResponse,
 )
 
 __all__ = [
@@ -34,4 +38,8 @@ __all__ = [
     "MasterDataResponse",
     "ThemeConfig",
     "ThemeConfigDocument",
+    "RevisionBase",
+    "RevisionCreate",
+    "RevisionResponse",
+    "RevisionDetailResponse",
 ]
