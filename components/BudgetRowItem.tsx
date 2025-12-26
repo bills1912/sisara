@@ -34,6 +34,7 @@ interface Props {
       efisiensi: number;
   };
   theme: ThemeConfig;
+  isRevisionMode: boolean;
   onSelect: (row: BudgetRow, section: 'SEMULA' | 'MENJADI' | 'MONTHLY', monthIndex?: number) => void;
   onToggle: (id: string) => void;
   onAddChild: (row: BudgetRow) => void;
@@ -48,7 +49,7 @@ interface MenuPosition {
   placement: 'top' | 'bottom';
 }
 
-const BudgetRowItem: React.FC<Props> = ({ row, level, showSemula, showMenjadi, showSelisih, showEfisiensi, visibleQuarters, offsets, widths, theme, onSelect, onToggle, onAddChild, onCopyRow, onDeleteRow }) => {
+const BudgetRowItem: React.FC<Props> = ({ row, level, showSemula, showMenjadi, showSelisih, showEfisiensi, visibleQuarters, offsets, widths, theme, isRevisionMode, onSelect, onToggle, onAddChild, onCopyRow, onDeleteRow }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<MenuPosition | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -66,6 +67,12 @@ const BudgetRowItem: React.FC<Props> = ({ row, level, showSemula, showMenjadi, s
   const isSummaryRow = [RowType.PROGRAM, RowType.KRO, RowType.RO, RowType.HEADER_ACCOUNT].includes(row.type);
   const isItemType = row.type === RowType.ITEM;
   const canEdit = (isItemType || row.menjadi !== null) && !row.isBlocked;
+
+  // REVISION MODE LOGIC:
+  // In Revision Mode, monthly details are LOCKED. Only Semula/Menjadi (Revision) are editable.
+  const canEditMonthly = canEdit && !isRevisionMode; 
+  // canEditRevisi (Semula/Menjadi) remains true if the row is generally editable
+  const canEditRevisi = canEdit;
 
   // Regular scrolling cells use classes for hover effects
   const scrollableCellClass = isSummaryRow 
@@ -128,9 +135,10 @@ const BudgetRowItem: React.FC<Props> = ({ row, level, showSemula, showMenjadi, s
   const handleCellClick = (section: 'SEMULA' | 'MENJADI' | 'MONTHLY', monthIndex?: number) => {
     if (section === 'SEMULA' && row.semula) {
         onSelect(row, 'SEMULA');
-    } else if (section === 'MENJADI' && canEdit) {
+    } else if (section === 'MENJADI' && canEditRevisi) {
         onSelect(row, 'MENJADI');
-    } else if (section === 'MONTHLY' && canEdit) {
+    } else if (section === 'MONTHLY') {
+        if (!canEditMonthly) return; // Blocked in Revision Mode
         onSelect(row, 'MONTHLY', monthIndex);
     }
   };
@@ -225,9 +233,9 @@ const BudgetRowItem: React.FC<Props> = ({ row, level, showSemula, showMenjadi, s
         {/* FROZEN MENJADI */}
         {showMenjadi && (
             <>
-            <td onClick={() => handleCellClick('MENJADI')} className={`sticky z-[50] border-r border-b border-gray-300 text-right px-1 text-[10px] text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap ${canEdit ? 'cursor-pointer hover:opacity-80' : ''}`} style={{ left: `${offsets.menjadi}px`, width: `${widths.volVal}px`, ...getStickyCellStyle(true) }}><span>{row.menjadi?.volume}</span></td>
-            <td onClick={() => handleCellClick('MENJADI')} className={`sticky z-[50] border-r border-b border-gray-300 text-left px-1 text-[10px] text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap ${canEdit ? 'cursor-pointer hover:opacity-80' : ''}`} style={{ left: `${offsets.menjadi + widths.volVal}px`, width: `${widths.volUnit}px`, ...getStickyCellStyle(true) }}><span>{row.menjadi?.unit}</span></td>
-            <td onClick={() => handleCellClick('MENJADI')} className={`sticky z-[50] border-r border-b border-gray-300 text-right px-1 text-[10px] text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap ${canEdit ? 'cursor-pointer hover:opacity-80' : ''}`} style={{ left: `${offsets.menjadi + widths.volVal + widths.volUnit}px`, width: `${widths.price}px`, ...getStickyCellStyle(true) }}><span>{row.menjadi ? formatCurrency(row.menjadi.price) : '-'}</span></td>
+            <td onClick={() => handleCellClick('MENJADI')} className={`sticky z-[50] border-r border-b border-gray-300 text-right px-1 text-[10px] text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap ${canEditRevisi ? 'cursor-pointer hover:opacity-80' : ''}`} style={{ left: `${offsets.menjadi}px`, width: `${widths.volVal}px`, ...getStickyCellStyle(true) }}><span>{row.menjadi?.volume}</span></td>
+            <td onClick={() => handleCellClick('MENJADI')} className={`sticky z-[50] border-r border-b border-gray-300 text-left px-1 text-[10px] text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap ${canEditRevisi ? 'cursor-pointer hover:opacity-80' : ''}`} style={{ left: `${offsets.menjadi + widths.volVal}px`, width: `${widths.volUnit}px`, ...getStickyCellStyle(true) }}><span>{row.menjadi?.unit}</span></td>
+            <td onClick={() => handleCellClick('MENJADI')} className={`sticky z-[50] border-r border-b border-gray-300 text-right px-1 text-[10px] text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap ${canEditRevisi ? 'cursor-pointer hover:opacity-80' : ''}`} style={{ left: `${offsets.menjadi + widths.volVal + widths.volUnit}px`, width: `${widths.price}px`, ...getStickyCellStyle(true) }}><span>{row.menjadi ? formatCurrency(row.menjadi.price) : '-'}</span></td>
             <td className="sticky z-[50] border-r border-b border-gray-300 text-right px-1 text-[10px] font-bold text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap" style={{ left: `${offsets.menjadi + widths.volVal + widths.volUnit + widths.price}px`, width: `${widths.total}px`, ...getStickyCellStyle(true) }}>{row.menjadi ? formatCurrency(row.menjadi.total) : '-'}</td>
             </>
         )}
@@ -265,13 +273,13 @@ const BudgetRowItem: React.FC<Props> = ({ row, level, showSemula, showMenjadi, s
                         
                         return (
                             <React.Fragment key={`${row.id}-m-${m}`}>
-                                <td onClick={() => handleCellClick('MONTHLY', m)} className={`border-r border-b border-gray-300 p-1 text-right text-[10px] text-gray-900 ${canEdit ? 'cursor-pointer hover:bg-blue-50' : ''} ${scrollableCellClass}`}>{jmlReal > 0 ? formatCurrency(jmlReal) : '-'}</td>
-                                <td onClick={() => handleCellClick('MONTHLY', m)} className={`border-r border-b border-gray-300 p-1 text-right text-[10px] text-gray-900 ${canEdit ? 'cursor-pointer hover:bg-blue-50' : ''} ${scrollableCellClass}`}>{jmlAkan > 0 ? formatCurrency(jmlAkan) : '-'}</td>
+                                <td onClick={() => handleCellClick('MONTHLY', m)} className={`border-r border-b border-gray-300 p-1 text-right text-[10px] text-gray-900 ${canEditMonthly ? 'cursor-pointer hover:bg-blue-50' : 'cursor-not-allowed'} ${scrollableCellClass}`}>{jmlReal > 0 ? formatCurrency(jmlReal) : '-'}</td>
+                                <td onClick={() => handleCellClick('MONTHLY', m)} className={`border-r border-b border-gray-300 p-1 text-right text-[10px] text-gray-900 ${canEditMonthly ? 'cursor-pointer hover:bg-blue-50' : 'cursor-not-allowed'} ${scrollableCellClass}`}>{jmlAkan > 0 ? formatCurrency(jmlAkan) : '-'}</td>
                                 <td className={`border-r border-b border-gray-300 p-1 text-right text-[10px] font-bold text-gray-900 ${isSummaryRow ? scrollableCellClass : 'bg-pink-50'}`}>{total > 0 ? formatCurrency(total) : '-'}</td>
-                                <td onClick={() => handleCellClick('MONTHLY', m)} className={`border-r border-b border-gray-300 p-1 text-center text-[9px] text-gray-900 ${canEdit ? 'cursor-pointer hover:bg-blue-50' : ''} ${scrollableCellClass}`}>{detail.date || '-'}</td>
-                                <td onClick={() => handleCellClick('MONTHLY', m)} className={`border-r border-b border-gray-300 p-1 text-center text-[9px] text-gray-900 ${canEdit ? 'cursor-pointer hover:bg-blue-50' : ''} ${scrollableCellClass}`}>{detail.spm || '-'}</td>
+                                <td onClick={() => handleCellClick('MONTHLY', m)} className={`border-r border-b border-gray-300 p-1 text-center text-[9px] text-gray-900 ${canEditMonthly ? 'cursor-pointer hover:bg-blue-50' : 'cursor-not-allowed'} ${scrollableCellClass}`}>{detail.date || '-'}</td>
+                                <td onClick={() => handleCellClick('MONTHLY', m)} className={`border-r border-b border-gray-300 p-1 text-center text-[9px] text-gray-900 ${canEditMonthly ? 'cursor-pointer hover:bg-blue-50' : 'cursor-not-allowed'} ${scrollableCellClass}`}>{detail.spm || '-'}</td>
                                 <td className={`border-r border-b border-gray-300 p-0 text-center align-middle ${scrollableCellClass}`}><input type="checkbox" checked={detail.isVerified} disabled className="w-3 h-3"/></td>
-                                <td onClick={() => handleCellClick('MONTHLY', m)} className={`border-r border-b border-gray-300 p-1 text-right text-[10px] text-gray-900 ${canEdit ? 'cursor-pointer hover:bg-blue-50' : ''} ${scrollableCellClass}`}>{sp2d > 0 ? formatCurrency(sp2d) : '-'}</td>
+                                <td onClick={() => handleCellClick('MONTHLY', m)} className={`border-r border-b border-gray-300 p-1 text-right text-[10px] text-gray-900 ${canEditMonthly ? 'cursor-pointer hover:bg-blue-50' : 'cursor-not-allowed'} ${scrollableCellClass}`}>{sp2d > 0 ? formatCurrency(sp2d) : '-'}</td>
                                 <td className={`border-r border-b border-gray-300 p-1 text-right text-[10px] font-medium ${scrollableCellClass} ${gap !== 0 ? 'text-red-600' : 'text-gray-400'}`}>{gap !== 0 ? formatCurrency(gap) : '-'}</td>
                             </React.Fragment>
                         );
@@ -302,6 +310,7 @@ const BudgetRowItem: React.FC<Props> = ({ row, level, showSemula, showMenjadi, s
           offsets={offsets} 
           widths={widths} 
           theme={theme}
+          isRevisionMode={isRevisionMode}
         />
       ))}
     </>

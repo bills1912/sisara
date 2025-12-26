@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { RowType, MasterData } from '../types';
 import { X, Plus, Trash2, Database, Edit2, Save as SaveIcon, XCircle } from 'lucide-react';
@@ -13,7 +14,7 @@ interface Props {
 }
 
 const MasterDataModal: React.FC<Props> = ({ masterData, onAdd, onEdit, onDelete, onClose }) => {
-  const [activeTab, setActiveTab] = useState<RowType>(RowType.KRO);
+  const [activeTab, setActiveTab] = useState<RowType>(RowType.PROGRAM);
   
   // New Item State
   const [newCode, setNewCode] = useState('');
@@ -80,6 +81,8 @@ const MasterDataModal: React.FC<Props> = ({ masterData, onAdd, onEdit, onDelete,
   };
 
   const tabs = [
+      { id: RowType.SATKER, label: 'Satuan Kerja' },
+      { id: RowType.PROGRAM, label: 'Program' },
       { id: RowType.KRO, label: 'KRO' },
       { id: RowType.RO, label: 'RO' },
       { id: RowType.COMPONENT, label: 'Komponen' },

@@ -1,11 +1,13 @@
 
+
 export enum RowType {
+  SATKER = 'SATKER', // New Root Level
   PROGRAM = 'PROGRAM',
   KRO = 'KRO', // Klasifikasi Rincian Output
   RO = 'RO',   // Rincian Output
   COMPONENT = 'COMPONENT',
   SUBCOMPONENT = 'SUBCOMPONENT',
-  HEADER_ACCOUNT = 'HEADER_ACCOUNT', // New Category: A. TANPA SUB KOMPONEN
+  HEADER_ACCOUNT = 'HEADER_ACCOUNT', // A. TANPA SUB KOMPONEN
   ITEM = 'ITEM'
 }
 

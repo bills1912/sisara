@@ -10,8 +10,8 @@ import BottomEditor from './components/BottomEditor';
 import AddRowModal from './components/AddRowModal';
 import MasterDataModal from './components/MasterDataModal';
 import ConfirmationModal from './components/ConfirmationModal';
-import { Eye, EyeOff, Moon, Sun, Settings2, CheckSquare, Square, ChevronDown, ChevronUp, ArrowDown, ArrowUp, Loader2, AlertCircle, Save, Database } from 'lucide-react';
-import { MONTH_NAMES, QUARTERS, defaultTheme, formatCurrency, getAccountPrefix, formatPercent } from './utils';
+import { Eye, EyeOff, Moon, Sun, Settings2, CheckSquare, Square, ChevronDown, ChevronUp, ArrowDown, ArrowUp, Loader2, AlertCircle, Save, Database, PlusCircle, HelpCircle, Lock, Unlock } from 'lucide-react';
+import { MONTH_NAMES, QUARTERS, defaultTheme, formatCurrency, getAccountPrefix, formatPercent, recalculateBudget } from './utils';
 import { api } from './api';
 import { initialData } from './data';
 
@@ -33,6 +33,12 @@ function App() {
   // Grouped View Menu State
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   const viewMenuRef = useRef<HTMLDivElement>(null);
+
+  // Legend/Hints State
+  const [isLegendOpen, setIsLegendOpen] = useState(false);
+
+  // Revision Mode State
+  const [isRevisionMode, setIsRevisionMode] = useState(false);
 
   // Scroll & Ref
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -58,6 +64,7 @@ function App() {
 
   // Add Row State
   const [addingChildTo, setAddingChildTo] = useState<BudgetRow | null>(null);
+  const [isAddingRoot, setIsAddingRoot] = useState(false);
 
   // Confirmation Modal State
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -79,7 +86,9 @@ function App() {
             api.getTheme()
         ]);
         
-        setData(fetchedBudget);
+        // Ensure data is recalculated upon load for consistency
+        const processedBudget = recalculateBudget(fetchedBudget);
+        setData(processedBudget);
         setMasterData(fetchedMaster);
         setTheme(fetchedTheme);
     } catch (e: any) {
@@ -109,10 +118,13 @@ function App() {
 
   // --- DATA SAVING WRAPPERS ---
   const handleSaveBudget = async (newData: BudgetRow[]) => {
-      setData(newData); // Optimistic Update
+      // Always recalculate hierarchy totals before saving
+      const recalculatedData = recalculateBudget(newData);
+      
+      setData(recalculatedData); // Optimistic Update with calc
       setIsSaving(true);
       try {
-        await api.saveBudget(newData); // Backend Sync
+        await api.saveBudget(recalculatedData); // Backend Sync
       } catch (e: any) {
         alert("Gagal menyimpan perubahan ke server: " + e.message);
       } finally {
@@ -248,9 +260,15 @@ function App() {
 
   // Wrapper for updates that require confirmation (Editing values)
   const handleUpdateRowWithConfirmation = (id: string, updatedFields: Partial<BudgetRow>) => {
+      const isRevisionUpdate = isRevisionMode;
+      const title = isRevisionUpdate ? "Konfirmasi Revisi" : "Simpan Perubahan?";
+      const message = isRevisionUpdate 
+        ? "Anda dalam Mode Revisi. Apakah Anda yakin data Semula/Menjadi sudah benar dan ingin menyimpannya?" 
+        : "Apakah Anda yakin ingin menyimpan perubahan pada data ini?";
+
       requestConfirmation(
-          "Simpan Perubahan?",
-          "Apakah Anda yakin ingin menyimpan perubahan pada data ini?",
+          title,
+          message,
           () => performUpdateRow(id, updatedFields)
       );
   };
@@ -263,27 +281,36 @@ function App() {
   const handleAddRow = (parentId: string, newRowData: BudgetRow) => {
       requestConfirmation(
           "Tambah Data Baru",
-          "Apakah Anda yakin ingin menambahkan baris data baru ini?",
+          "Apakah Anda yakin ingin menambahkan data ini?",
           () => {
             let newData: BudgetRow[] = [];
-            const addRecursive = (rows: BudgetRow[]): BudgetRow[] => {
-                return rows.map(row => {
-                if (row.id === parentId) {
-                    return {
-                    ...row,
-                    isOpen: true,
-                    children: [...row.children, newRowData]
-                    };
-                }
-                if (row.children && row.children.length > 0) {
-                    return { ...row, children: addRecursive(row.children) };
-                }
-                return row;
-                });
-            };
-            newData = addRecursive(data);
+            
+            if (!parentId) {
+               // Root addition
+               newData = [...data, newRowData];
+               setIsAddingRoot(false);
+            } else {
+               // Child addition
+               const addRecursive = (rows: BudgetRow[]): BudgetRow[] => {
+                    return rows.map(row => {
+                    if (row.id === parentId) {
+                        return {
+                        ...row,
+                        isOpen: true,
+                        children: [...row.children, newRowData]
+                        };
+                    }
+                    if (row.children && row.children.length > 0) {
+                        return { ...row, children: addRecursive(row.children) };
+                    }
+                    return row;
+                    });
+                };
+                newData = addRecursive(data);
+                setAddingChildTo(null);
+            }
+
             handleSaveBudget(newData);
-            setAddingChildTo(null);
           }
       );
   };
@@ -699,15 +726,51 @@ function App() {
 
       <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 relative">
         <div className={`${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-4 shadow-sm border-b z-[80] flex-shrink-0 transition-colors`}>
-            <div className="flex justify-between items-center mb-2">
+            <div className="flex justify-between items-center mb-0">
                 <div>
                 <h1 className={`text-xl font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-900'}`}>
                     Sistem Revisi & RPD
                     {isSaving && <span className="ml-3 text-xs font-normal text-green-600 animate-pulse flex inline-flex items-center gap-1"><Loader2 size={10} className="animate-spin"/> Menyimpan...</span>}
+                    {isRevisionMode && <span className="ml-3 text-xs font-bold text-white bg-orange-600 px-2 py-0.5 rounded animate-pulse">MODE REVISI AKTIF</span>}
                 </h1>
                 <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-xs mt-1`}>Satuan Kerja: BPS Kota Gunungsitoli</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    
+                    {/* REVISION MODE TOGGLE */}
+                     <button 
+                        onClick={() => setIsRevisionMode(!isRevisionMode)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm border ${isRevisionMode 
+                            ? 'bg-orange-600 text-white border-orange-700 hover:bg-orange-700' 
+                            : (isDarkMode ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200')}`}
+                        title={isRevisionMode ? "Matikan Mode Revisi" : "Aktifkan Mode Revisi"}
+                    >
+                        {isRevisionMode ? <Lock size={14} /> : <Unlock size={14} />}
+                        {isRevisionMode ? "Mode Revisi ON" : "Mode Revisi OFF"}
+                    </button>
+
+                    {/* HINTS POPUP */}
+                    <div 
+                        className="relative group"
+                        onMouseEnter={() => setIsLegendOpen(true)}
+                        onMouseLeave={() => setIsLegendOpen(false)}
+                    >
+                        <button 
+                            className={`p-2 rounded-full ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'} hover:bg-blue-100 hover:text-blue-600 transition-all`}
+                            onClick={() => setIsLegendOpen(!isLegendOpen)}
+                            title="Keterangan Warna"
+                        >
+                            <HelpCircle size={18} />
+                        </button>
+                        
+                        {(isLegendOpen) && (
+                            <div className="absolute right-0 top-full mt-2 w-72 bg-white shadow-xl rounded-lg p-3 z-[100] border border-gray-200 animate-in fade-in zoom-in-95 duration-200">
+                                <Legend />
+                                <div className="absolute top-0 right-4 w-3 h-3 bg-white border-t border-l border-gray-200 transform rotate-45 -mt-1.5"></div>
+                            </div>
+                        )}
+                    </div>
+
                     <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-full ${isDarkMode ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-200 text-gray-600'} hover:opacity-80 transition-all`}>
                         {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
                     </button>
@@ -739,7 +802,7 @@ function App() {
                     )}
                 </div>
             </div>
-            {currentView === 'table' && <Legend />}
+            {/* Legend removed from here */}
         </div>
 
         {currentView === 'settings' ? (
@@ -753,7 +816,18 @@ function App() {
                 <thead className={`${isDarkMode ? 'bg-gray-800' : 'bg-gray-50'} top-0 sticky z-[60]`}>
                   {/* Headers */}
                   <tr className="h-12">
-                    <th className="sticky left-0 z-[70] bg-blue-700 text-white border-r border-b border-blue-600 px-4 w-[350px] min-w-[350px] max-w-[350px]" style={{ width: '350px', minWidth: '350px', maxWidth: '350px' }} rowSpan={3}>Kode / Uraian</th>
+                    <th className="sticky left-0 z-[70] bg-blue-700 text-white border-r border-b border-blue-600 px-4 w-[350px] min-w-[350px] max-w-[350px]" style={{ width: '350px', minWidth: '350px', maxWidth: '350px' }} rowSpan={3}>
+                        <div className="flex items-center justify-between">
+                            <span>Kode / Uraian</span>
+                            <button 
+                                onClick={() => setIsAddingRoot(true)} 
+                                className="bg-blue-600 hover:bg-blue-500 text-white rounded-full p-1 transition-colors"
+                                title="Tambah Satuan Kerja (Root)"
+                            >
+                                <PlusCircle size={16} />
+                            </button>
+                        </div>
+                    </th>
                     {showSemula && <th className="sticky z-[60] bg-gray-700 text-white border-r border-b border-gray-600 text-center" style={{ left: `${getSemulaOffset()}px`, minWidth: `${semulaWidth}px` }} colSpan={4} rowSpan={2}>SEMULA</th>}
                     {showMenjadi && <th className="sticky z-[60] bg-yellow-600 text-white border-r border-b border-yellow-500 text-center" style={{ left: `${getMenjadiOffset()}px`, minWidth: `${menjadiWidth}px` }} colSpan={4} rowSpan={2}>MENJADI</th>}
                     {showSelisih && <th className="sticky z-[60] bg-orange-600 text-white border-r border-b border-orange-500 text-center" style={{ left: `${getSelisihOffset()}px`, minWidth: `${selisihWidth}px` }} colSpan={1} rowSpan={2}>SELISIH</th>}
@@ -790,6 +864,7 @@ function App() {
                       showEfisiensi={showEfisiensi}
                       visibleQuarters={visibleQuarters}
                       theme={theme}
+                      isRevisionMode={isRevisionMode}
                       offsets={{
                           semula: getSemulaOffset(),
                           menjadi: getMenjadiOffset(),
@@ -879,7 +954,18 @@ function App() {
             onClose={closeEditor} 
             onSave={handleUpdateRowWithConfirmation}
         />
-        {addingChildTo && <AddRowModal parentRow={addingChildTo} masterData={masterData} onClose={() => setAddingChildTo(null)} onSave={handleAddRow}/>}
+        {/* Render AddRowModal either for child (addingChildTo) or root (isAddingRoot) */}
+        {(addingChildTo || isAddingRoot) && (
+            <AddRowModal 
+                parentRow={addingChildTo} // Will be null if isAddingRoot is true
+                masterData={masterData} 
+                onClose={() => {
+                    setAddingChildTo(null);
+                    setIsAddingRoot(false);
+                }} 
+                onSave={handleAddRow}
+            />
+        )}
         {showMasterDataModal && (
             <MasterDataModal 
                 masterData={masterData} 

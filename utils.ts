@@ -77,44 +77,48 @@ export const defaultTheme: ThemeConfig = {
 
 export const getRowIndentClass = (type: string): string => {
   switch (type) {
+    case 'SATKER': return 'pl-1';
     case 'PROGRAM': return 'pl-2';
     case 'KRO': return 'pl-6';
     case 'RO': return 'pl-10';
     case 'COMPONENT': return 'pl-14';
     case 'SUBCOMPONENT': return 'pl-20';
-    case 'HEADER_ACCOUNT': return 'pl-20 italic'; // Indent same as subcomponent or slightly deeper
+    case 'HEADER_ACCOUNT': return 'pl-20 italic'; 
     case 'ITEM': return 'pl-24';
     default: return 'pl-2';
   }
 };
 
 export const getRowBaseColor = (type: string, isDarkMode: boolean): string => {
-    if (isDarkMode) return 'transparent'; // Use default dark mode bg
+    if (isDarkMode) return 'transparent'; 
     
     switch (type) {
-        case RowType.PROGRAM: return 'bg-blue-50'; // Pastel Blue
-        case RowType.KRO: return 'bg-emerald-50'; // Pastel Green
-        case RowType.RO: return 'bg-amber-50'; // Pastel Yellow
-        case RowType.HEADER_ACCOUNT: return 'bg-gray-100 font-bold text-gray-600';
+        case RowType.SATKER: return 'bg-gray-100 font-extrabold text-gray-900 border-gray-300'; // Satker bold gray bg
+        case RowType.PROGRAM: return 'bg-white font-bold text-gray-800'; 
+        case RowType.KRO: return 'bg-emerald-50'; 
+        case RowType.RO: return 'bg-amber-50'; 
+        case RowType.HEADER_ACCOUNT: return 'bg-gray-50 font-bold text-gray-600';
         default: return 'bg-white';
     }
 };
 
 export const getRowBaseColorHex = (type: string, isDarkMode: boolean): string => {
-    if (isDarkMode) return '#1f2937'; // gray-800
+    if (isDarkMode) return '#1f2937'; 
     
     switch (type) {
-        case RowType.PROGRAM: return '#eff6ff'; // blue-50
+        case RowType.SATKER: return '#f3f4f6'; // gray-100
+        case RowType.PROGRAM: return '#ffffff'; // white
         case RowType.KRO: return '#ecfdf5'; // emerald-50
         case RowType.RO: return '#fffbeb'; // amber-50
-        case RowType.HEADER_ACCOUNT: return '#f3f4f6'; // gray-100
+        case RowType.HEADER_ACCOUNT: return '#f9fafb'; // gray-50
         default: return '#ffffff'; // white
     }
 };
 
 export const getRowTextStyle = (type: string): string => {
     switch (type) {
-        case RowType.PROGRAM: return 'font-bold text-blue-900 uppercase tracking-wide';
+        case RowType.SATKER: return 'font-extrabold text-gray-900 uppercase tracking-wide text-sm';
+        case RowType.PROGRAM: return 'font-bold text-blue-900 uppercase tracking-normal';
         case RowType.KRO: return 'font-bold text-emerald-900';
         case RowType.RO: return 'font-bold text-amber-900';
         case RowType.COMPONENT: return 'font-semibold text-gray-800';
@@ -138,4 +142,44 @@ export const MONTH_NAMES = [
 
 export const calculateAllocatedTotal = (allocation: MonthlyAllocation): number => {
   return Object.values(allocation).reduce((acc, curr) => acc + (curr.rpd || 0), 0);
+};
+
+// --- HIERARCHICAL CALCULATION LOGIC ---
+
+/**
+ * Recursively recalculates the totals of a row based on its children.
+ * Formula logic:
+ * Satker = Sum(Program)
+ * Program = Sum(KRO)
+ * KRO = Sum(RO)
+ * RO = Sum(Component)
+ * ...and so on.
+ */
+export const recalculateBudget = (rows: BudgetRow[]): BudgetRow[] => {
+    return rows.map(row => {
+        // Base case: If no children, return row as is (Leaf node - User input)
+        if (!row.children || row.children.length === 0) {
+            return row;
+        }
+
+        // Recursive step: Process children first (Bottom-Up)
+        const updatedChildren = recalculateBudget(row.children);
+
+        // Calculate Sums from direct children
+        const sumSemula = updatedChildren.reduce((acc, child) => acc + (child.semula?.total || 0), 0);
+        const sumMenjadi = updatedChildren.reduce((acc, child) => acc + (child.menjadi?.total || 0), 0);
+        
+        // Construct updated row with calculated totals
+        // For parent rows, we typically zero out volume/price and just show Total
+        return {
+            ...row,
+            children: updatedChildren,
+            semula: row.semula 
+                ? { ...row.semula, total: sumSemula } 
+                : (sumSemula > 0 ? { volume: 0, unit: '', price: 0, total: sumSemula } : null),
+            menjadi: row.menjadi 
+                ? { ...row.menjadi, total: sumMenjadi } 
+                : (sumMenjadi > 0 ? { volume: 0, unit: '', price: 0, total: sumMenjadi } : null)
+        };
+    });
 };

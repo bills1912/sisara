@@ -1,17 +1,34 @@
 
+
 import React, { useState } from 'react';
 import { BudgetRow, RowType, MasterData } from '../types';
 import { X } from 'lucide-react';
 
 interface Props {
-  parentRow: BudgetRow;
+  parentRow: BudgetRow | null; // Nullable for Root level (Satker)
   masterData: MasterData;
   onClose: () => void;
   onSave: (parentId: string, newRow: BudgetRow) => void;
 }
 
 const AddRowModal: React.FC<Props> = ({ parentRow, masterData, onClose, onSave }) => {
-  const [type, setType] = useState<RowType>(RowType.ITEM);
+  // Logic for default type based on parent
+  const getDefaultType = (): RowType => {
+      if (!parentRow) return RowType.SATKER;
+      switch (parentRow.type) {
+          case RowType.SATKER: return RowType.PROGRAM;
+          case RowType.PROGRAM: return RowType.KRO;
+          case RowType.KRO: return RowType.RO;
+          case RowType.RO: return RowType.COMPONENT;
+          case RowType.COMPONENT: return RowType.SUBCOMPONENT;
+          case RowType.SUBCOMPONENT: return RowType.HEADER_ACCOUNT;
+          case RowType.HEADER_ACCOUNT: return RowType.ITEM;
+          case RowType.ITEM: return RowType.ITEM; // Detail
+          default: return RowType.ITEM;
+      }
+  };
+
+  const [type, setType] = useState<RowType>(getDefaultType());
   
   // Selection State
   const [selectedCode, setSelectedCode] = useState('');
@@ -45,7 +62,9 @@ const AddRowModal: React.FC<Props> = ({ parentRow, masterData, onClose, onSave }
         return;
     }
 
-    const newId = `${parentRow.id}-${Math.floor(Math.random() * 10000)}`;
+    // If parentRow exists use its ID, otherwise use 'root' prefix
+    const parentIdPrefix = parentRow ? parentRow.id : 'root';
+    const newId = `${parentIdPrefix}-${Math.floor(Math.random() * 10000)}`;
     
     const vol = parseFloat(volume);
     const prc = parseFloat(price);
@@ -68,14 +87,16 @@ const AddRowModal: React.FC<Props> = ({ parentRow, masterData, onClose, onSave }
       isOpen: true
     };
 
-    onSave(parentRow.id, newRow);
+    onSave(parentRow ? parentRow.id : '', newRow);
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md text-gray-900">
         <div className="flex justify-between items-center p-4 border-b">
-          <h3 className="font-bold text-gray-800">Tambah Data Baru</h3>
+          <h3 className="font-bold text-gray-800">
+             {parentRow ? "Tambah Data Baru" : "Tambah Satuan Kerja (Root)"}
+          </h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
             <X size={20} />
           </button>
@@ -83,7 +104,11 @@ const AddRowModal: React.FC<Props> = ({ parentRow, masterData, onClose, onSave }
         
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="bg-blue-50 p-3 rounded text-sm text-blue-800 mb-4 border border-blue-100">
-            Menambahkan ke: <span className="font-bold">{parentRow.code} - {parentRow.description}</span>
+             {parentRow ? (
+                <>Menambahkan ke: <span className="font-bold">{parentRow.code} - {parentRow.description}</span></>
+             ) : (
+                <span className="font-bold">Menambahkan Satuan Kerja Baru (Level Tertinggi)</span>
+             )}
           </div>
 
           <div>
@@ -97,6 +122,8 @@ const AddRowModal: React.FC<Props> = ({ parentRow, masterData, onClose, onSave }
                 }}
                 className="w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-blue-500"
             >
+                {!parentRow && <option value={RowType.SATKER}>Satuan Kerja</option>}
+                <option value={RowType.PROGRAM}>Program</option>
                 <option value={RowType.KRO}>KRO (Keluaran)</option>
                 <option value={RowType.RO}>RO (Rincian Output)</option>
                 <option value={RowType.COMPONENT}>Komponen</option>
