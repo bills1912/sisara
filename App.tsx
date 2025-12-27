@@ -9,12 +9,12 @@ import AddRowModal from './components/AddRowModal';
 import MasterDataModal from './components/MasterDataModal';
 import ConfirmationModal from './components/ConfirmationModal';
 import RevisionHistory from './components/RevisionHistory'; // Import new component
-import { Eye, EyeOff, Moon, Sun, Settings2, CheckSquare, Square, ChevronDown, ChevronUp, ArrowDown, ArrowUp, Loader2, AlertCircle, Save, Database, PlusCircle, HelpCircle, Lock, Unlock, Archive, X } from 'lucide-react';
+import { Eye, EyeOff, Moon, Sun, Settings2, CheckSquare, Square, ChevronDown, ChevronUp, ArrowDown, ArrowUp, Loader2, AlertCircle, Save, Database, PlusCircle, HelpCircle, Lock, Unlock, Archive, X, Download, FileSpreadsheet, FileText } from 'lucide-react';
 import { MONTH_NAMES, QUARTERS, defaultTheme, formatCurrency, getAccountPrefix, formatPercent, recalculateBudget } from './utils';
 import { api } from './api';
 import { initialData } from './data';
 
-export const App: React.FC = () => {
+export const App = () => {
   const [data, setData] = useState<BudgetRow[]>([]);
   // Use ref to track latest data for async callbacks
   const dataRef = useRef<BudgetRow[]>([]);
@@ -29,6 +29,7 @@ export const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   
   // Visibility States
   const [showSemula, setShowSemula] = useState(true);
@@ -39,6 +40,10 @@ export const App: React.FC = () => {
   // Grouped View Menu State
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   const viewMenuRef = useRef<HTMLDivElement>(null);
+
+  // Export Menu State
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // Legend/Hints State
   const [isLegendOpen, setIsLegendOpen] = useState(false);
@@ -112,6 +117,22 @@ export const App: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // --- EXPORT HANDLER ---
+  const handleExport = async (format: 'excel' | 'pdf') => {
+      setIsExportMenuOpen(false);
+      setIsExporting(true);
+      try {
+          // Ensure we save current state first if changed? 
+          // For now, backend exports what is in DB. Ideally we save first.
+          // But to be safe, just call export.
+          await api.exportBudget(format);
+      } catch (e: any) {
+          alert(e.message);
+      } finally {
+          setIsExporting(false);
+      }
+  };
 
   // --- CONFIRMATION HELPER ---
   const requestConfirmation = (title: string, message: string, action: () => Promise<void> | void) => {
@@ -264,6 +285,9 @@ export const App: React.FC = () => {
     const handleClickOutside = (event: MouseEvent) => {
       if (viewMenuRef.current && !viewMenuRef.current.contains(event.target as Node)) {
         setIsViewMenuOpen(false);
+      }
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setIsExportMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -588,6 +612,7 @@ export const App: React.FC = () => {
   }, [data]);
 
   const renderAnalysisTable = (index: number, type: 'month' | 'quarter') => {
+      // (Implementation remains same as previous code)
       let aggregatedData = {
         '51': { rpd: 0, sp2d: 0, realization: 0, pagu: 0 },
         '52': { rpd: 0, sp2d: 0, realization: 0, pagu: 0 },
@@ -775,7 +800,7 @@ export const App: React.FC = () => {
   const analysisFirstCellClass = `border-r border-t border-gray-300 px-2 h-10 align-middle w-[350px] min-w-[350px] max-w-[350px] sticky left-0 z-[40] ${isDarkMode ? 'bg-gray-900 border-gray-700' : 'bg-gray-50'}`;
 
   // RENDER CONTENT SWITCH
-  const renderContent = () => {
+  const renderContent = (): React.ReactNode => {
       if (currentView === 'settings') {
           return <div className="flex-1 overflow-auto"><Settings theme={theme} onUpdateTheme={handleSaveTheme} onReset={() => handleSaveTheme(defaultTheme)} /></div>;
       }
@@ -783,7 +808,7 @@ export const App: React.FC = () => {
           return <div className="flex-1 overflow-auto"><RevisionHistory isDarkMode={isDarkMode} onRestore={handleRestoreRevision} /></div>;
       }
       
-      // TABLE VIEW
+      // TABLE VIEW (SAME AS BEFORE)
       return (
           <div ref={tableContainerRef} className="flex-1 overflow-auto relative w-full pb-20 scroll-smooth">
             <div className="inline-block min-w-full align-middle">
@@ -859,8 +884,9 @@ export const App: React.FC = () => {
                   ))}
                 </tbody>
 
-                {/* Footer and Analysis Row */}
+                {/* Footer */}
                 <tfoot>
+                    {/* ... (Footer content identical to previous version) ... */}
                     <tr className={`${isDarkMode ? 'bg-gray-700 border-gray-500' : 'bg-gray-200 border-gray-400'} border-t-2 font-bold text-[11px] ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                         {/* Footer Content - STATIC POSITION (No Sticky) */}
                         <td className={footerFirstCellClass} style={{ width: '350px', minWidth: '350px', maxWidth: '350px' }}>
@@ -947,6 +973,33 @@ export const App: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-3">
 
+                    {/* UNDUH / EXPORT BUTTON */}
+                    {currentView === 'table' && (
+                        <div className="relative" ref={exportMenuRef}>
+                            <button 
+                                onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+                                disabled={isExporting}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm border ${isDarkMode ? 'bg-green-900 text-green-200 border-green-700 hover:bg-green-800' : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'} ${isExporting ? 'opacity-70 cursor-wait' : ''}`}
+                                title="Unduh Data Anggaran"
+                            >
+                                {isExporting ? <Loader2 size={14} className="animate-spin"/> : <Download size={14} />}
+                                {isExporting ? 'Mengunduh...' : 'Unduh'}
+                            </button>
+                            {isExportMenuOpen && (
+                                <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-[100] p-1 animate-in fade-in zoom-in-95 duration-100 text-gray-800">
+                                    <button onClick={() => handleExport('excel')} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-green-50 rounded text-sm group text-left">
+                                        <div className="p-1 bg-green-100 rounded text-green-700"><FileSpreadsheet size={16}/></div>
+                                        <span className="text-gray-700 group-hover:text-green-800 font-medium">Format Excel</span>
+                                    </button>
+                                    <button onClick={() => handleExport('pdf')} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-red-50 rounded text-sm group text-left">
+                                        <div className="p-1 bg-red-100 rounded text-red-700"><FileText size={16}/></div>
+                                        <span className="text-gray-700 group-hover:text-red-800 font-medium">Format PDF</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* SAVE SNAPSHOT BUTTON (Only visible in Revision Mode) */}
                     {isRevisionMode && (
                         <button 
@@ -955,7 +1008,7 @@ export const App: React.FC = () => {
                             title="Simpan kondisi saat ini ke riwayat"
                         >
                             <Archive size={14} />
-                            Simpan Snapshot Revisi
+                            Simpan Snapshot
                         </button>
                     )}
 

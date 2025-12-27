@@ -59,6 +59,32 @@ export const api = {
         }
     },
 
+    // --- EXPORT ---
+    exportBudget: async (format: 'excel' | 'pdf') => {
+        try {
+            const endpoint = format === 'excel' ? 'export/excel' : 'export/pdf';
+            const res = await fetch(`${BASE_URL}/api/budget/${endpoint}`, {
+                method: 'GET',
+            });
+
+            if (!res.ok) throw new Error("Export failed");
+
+            // Convert to blob and trigger download
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = format === 'excel' ? 'rincian_anggaran.xlsx' : 'rincian_anggaran.pdf';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("API Error (exportBudget):", error);
+            throw new Error(`Gagal mengunduh file ${format.toUpperCase()}`);
+        }
+    },
+
     // --- REVISIONS ---
     getRevisions: async (): Promise<RevisionMeta[]> => {
         try {
