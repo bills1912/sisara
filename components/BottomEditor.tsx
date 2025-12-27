@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState } from 'react';
 import { BudgetRow, MonthlyDetail } from '../types';
 import { X, Save, Calendar, FileText, CheckCircle, Hash } from 'lucide-react';
@@ -44,15 +45,15 @@ const BottomEditor: React.FC<BottomEditorProps> = ({ row, section, monthIndex, o
 
   useEffect(() => {
     if (row) {
-      if (section === 'MENJADI' && row.menjadi) {
-        setFormData({ ...row.menjadi });
+      if (section === 'MENJADI') {
+        setFormData(row.menjadi ? { ...row.menjadi } : { volume: 0, unit: '', price: 0, total: 0 });
       } else if (section === 'MONTHLY' && monthIndex !== null) {
         const detail = row.monthlyAllocation[monthIndex] || { 
           rpd: 0, realization: 0, spm: '', date: '', isVerified: false, sp2d: 0 
         };
         setFormData({ ...detail });
-      } else if (section === 'SEMULA' && row.semula) {
-        setFormData({ ...row.semula });
+      } else if (section === 'SEMULA') {
+        setFormData(row.semula ? { ...row.semula } : { volume: 0, unit: '', price: 0, total: 0 });
       }
     }
   }, [row, section, monthIndex]);
@@ -62,9 +63,22 @@ const BottomEditor: React.FC<BottomEditorProps> = ({ row, section, monthIndex, o
   const handleSave = () => {
     if (section === 'MENJADI') {
       const total = (parseFloat(formData.volume) || 0) * (parseFloat(formData.price) || 0);
+      const currentMenjadi = row.menjadi || { volume: 0, unit: '', price: 0, total: 0 };
       onSave(row.id, {
         menjadi: {
-          ...row.menjadi!,
+          ...currentMenjadi,
+          volume: parseFloat(formData.volume) || 0,
+          unit: formData.unit,
+          price: parseFloat(formData.price) || 0,
+          total: total
+        }
+      });
+    } else if (section === 'SEMULA') {
+       const total = (parseFloat(formData.volume) || 0) * (parseFloat(formData.price) || 0);
+       const currentSemula = row.semula || { volume: 0, unit: '', price: 0, total: 0 };
+       onSave(row.id, {
+        semula: {
+          ...currentSemula,
           volume: parseFloat(formData.volume) || 0,
           unit: formData.unit,
           price: parseFloat(formData.price) || 0,
@@ -128,7 +142,6 @@ const BottomEditor: React.FC<BottomEditorProps> = ({ row, section, monthIndex, o
                 <label className="text-xs font-semibold text-gray-500 uppercase">Volume</label>
                 <input
                   type="number"
-                  disabled={section === 'SEMULA'}
                   className="w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none text-left"
                   value={formData.volume || ''}
                   onChange={e => setFormData({...formData, volume: e.target.value})}
@@ -138,7 +151,6 @@ const BottomEditor: React.FC<BottomEditorProps> = ({ row, section, monthIndex, o
                 <label className="text-xs font-semibold text-gray-500 uppercase">Satuan</label>
                 <input
                   type="text"
-                  disabled={section === 'SEMULA'}
                   className="w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none text-left"
                   value={formData.unit || ''}
                   onChange={e => setFormData({...formData, unit: e.target.value})}
@@ -148,7 +160,6 @@ const BottomEditor: React.FC<BottomEditorProps> = ({ row, section, monthIndex, o
               <CurrencyInput 
                 label="Harga Satuan" 
                 value={formData.price} 
-                disabled={section === 'SEMULA'}
                 onChange={(val: number) => setFormData({...formData, price: val})}
               />
 

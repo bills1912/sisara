@@ -1,5 +1,4 @@
 
-
 import { BudgetRow, ChangeStatus, MonthlyAllocation, ThemeConfig, RowType } from './types';
 
 export const formatCurrency = (value: number) => {
@@ -79,12 +78,13 @@ export const getRowIndentClass = (type: string): string => {
   switch (type) {
     case 'SATKER': return 'pl-1';
     case 'PROGRAM': return 'pl-2';
-    case 'KRO': return 'pl-6';
-    case 'RO': return 'pl-10';
-    case 'COMPONENT': return 'pl-14';
-    case 'SUBCOMPONENT': return 'pl-20';
-    case 'HEADER_ACCOUNT': return 'pl-20 italic'; 
-    case 'ITEM': return 'pl-24';
+    case 'ACTIVITY': return 'pl-6'; // Kegiatan
+    case 'KRO': return 'pl-10';
+    case 'RO': return 'pl-14';
+    case 'COMPONENT': return 'pl-20';
+    case 'SUBCOMPONENT': return 'pl-24';
+    case 'ACCOUNT': return 'pl-28'; // Akun
+    case 'DETAIL': return 'pl-32';  // Detail
     default: return 'pl-2';
   }
 };
@@ -93,11 +93,15 @@ export const getRowBaseColor = (type: string, isDarkMode: boolean): string => {
     if (isDarkMode) return 'transparent'; 
     
     switch (type) {
-        case RowType.SATKER: return 'bg-gray-100 font-extrabold text-gray-900 border-gray-300'; // Satker bold gray bg
-        case RowType.PROGRAM: return 'bg-white font-bold text-gray-800'; 
+        case RowType.SATKER: return 'bg-gray-100 font-extrabold text-gray-900 border-gray-300';
+        case RowType.PROGRAM: return 'bg-sky-100 font-bold text-gray-900'; // Changed to bg-sky-100
+        case RowType.ACTIVITY: return 'bg-indigo-50 font-bold text-indigo-900'; // Kegiatan - New Color
         case RowType.KRO: return 'bg-emerald-50'; 
         case RowType.RO: return 'bg-amber-50'; 
-        case RowType.HEADER_ACCOUNT: return 'bg-gray-50 font-bold text-gray-600';
+        case RowType.COMPONENT: return 'bg-white';
+        case RowType.SUBCOMPONENT: return 'bg-white';
+        case RowType.ACCOUNT: return 'bg-gray-50 font-semibold';
+        case RowType.DETAIL: return 'bg-white';
         default: return 'bg-white';
     }
 };
@@ -107,10 +111,11 @@ export const getRowBaseColorHex = (type: string, isDarkMode: boolean): string =>
     
     switch (type) {
         case RowType.SATKER: return '#f3f4f6'; // gray-100
-        case RowType.PROGRAM: return '#ffffff'; // white
+        case RowType.PROGRAM: return '#e0f2fe'; // sky-100
+        case RowType.ACTIVITY: return '#eef2ff'; // indigo-50
         case RowType.KRO: return '#ecfdf5'; // emerald-50
         case RowType.RO: return '#fffbeb'; // amber-50
-        case RowType.HEADER_ACCOUNT: return '#f9fafb'; // gray-50
+        case RowType.ACCOUNT: return '#f9fafb'; // gray-50
         default: return '#ffffff'; // white
     }
 };
@@ -119,11 +124,13 @@ export const getRowTextStyle = (type: string): string => {
     switch (type) {
         case RowType.SATKER: return 'font-extrabold text-gray-900 uppercase tracking-wide text-sm';
         case RowType.PROGRAM: return 'font-bold text-blue-900 uppercase tracking-normal';
+        case RowType.ACTIVITY: return 'font-bold text-indigo-900 uppercase';
         case RowType.KRO: return 'font-bold text-emerald-900';
         case RowType.RO: return 'font-bold text-amber-900';
         case RowType.COMPONENT: return 'font-semibold text-gray-800';
         case RowType.SUBCOMPONENT: return 'font-medium italic text-gray-600';
-        case RowType.HEADER_ACCOUNT: return 'font-bold text-gray-500 uppercase';
+        case RowType.ACCOUNT: return 'font-bold text-gray-700';
+        case RowType.DETAIL: return 'text-gray-700'; // Normal text, ensure visible
         default: return 'text-gray-900';
     }
 };
@@ -145,16 +152,6 @@ export const calculateAllocatedTotal = (allocation: MonthlyAllocation): number =
 };
 
 // --- HIERARCHICAL CALCULATION LOGIC ---
-
-/**
- * Recursively recalculates the totals of a row based on its children.
- * Formula logic:
- * Satker = Sum(Program)
- * Program = Sum(KRO)
- * KRO = Sum(RO)
- * RO = Sum(Component)
- * ...and so on.
- */
 export const recalculateBudget = (rows: BudgetRow[]): BudgetRow[] => {
     return rows.map(row => {
         // Base case: If no children, return row as is (Leaf node - User input)
@@ -170,7 +167,6 @@ export const recalculateBudget = (rows: BudgetRow[]): BudgetRow[] => {
         const sumMenjadi = updatedChildren.reduce((acc, child) => acc + (child.menjadi?.total || 0), 0);
         
         // Construct updated row with calculated totals
-        // For parent rows, we typically zero out volume/price and just show Total
         return {
             ...row,
             children: updatedChildren,

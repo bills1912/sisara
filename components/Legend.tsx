@@ -1,7 +1,6 @@
-
 import React from 'react';
 
-const Legend: React.FC = () => {
+const Legend = () => {
   return (
     <div className="text-xs text-gray-800">
       <h3 className="font-bold mb-2 pb-1 border-b border-gray-200 text-gray-900">KETERANGAN WARNA</h3>

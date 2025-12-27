@@ -1,10 +1,11 @@
 
+
 import React from 'react';
-import { LayoutGrid, Palette, Table, ChevronLeft, ChevronRight, Database } from 'lucide-react';
+import { LayoutGrid, Palette, Table, ChevronLeft, ChevronRight, Database, History } from 'lucide-react';
 
 interface SidebarProps {
-  currentView: 'table' | 'settings';
-  onChangeView: (view: 'table' | 'settings') => void;
+  currentView: 'table' | 'settings' | 'history';
+  onChangeView: (view: 'table' | 'settings' | 'history') => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onOpenMasterData: () => void;
@@ -28,10 +29,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isCollapse
       <div className={`h-16 flex items-center ${isCollapsed ? 'justify-center' : 'px-6'} border-b ${borderClass} transition-all overflow-hidden`}>
         <img 
             src="assets/images/logo.png" 
-            alt="Logo SISARA" 
+            alt="Logo NIFILI" 
             className="h-10 w-auto object-contain flex-shrink-0"
         />
-        {!isCollapsed && <span className="ml-3 font-bold text-lg whitespace-nowrap">SISARA</span>}
+        {!isCollapsed && <span className="ml-3 font-bold text-lg whitespace-nowrap">NIFILI</span>}
       </div>
       
       <nav className="flex-1 py-4 overflow-hidden">
@@ -42,6 +43,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isCollapse
         >
           <Table size={20} className="flex-shrink-0" />
           {!isCollapsed && <span className="ml-3 whitespace-nowrap">Tabel Utama</span>}
+        </button>
+
+        <button 
+          onClick={() => onChangeView('history')}
+          className={`w-full flex items-center px-4 py-4 transition-colors border-l-4 ${currentView === 'history' ? activeClass : inactiveClass}`}
+          title="Riwayat Revisi"
+        >
+          <History size={20} className="flex-shrink-0" />
+          {!isCollapsed && <span className="ml-3 whitespace-nowrap">Riwayat Revisi</span>}
         </button>
         
         <button 
@@ -71,7 +81,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isCollapse
       </button>
 
       <div className={`p-4 border-t ${borderClass} text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-400'} ${isCollapsed ? 'text-center' : ''}`}>
-        {!isCollapsed ? 'v1.0.2' : 'v1'}
+        {!isCollapsed ? 'v1.0.3' : 'v1'}
       </div>
     </div>
   );

@@ -1,8 +1,7 @@
 
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BudgetRow, RowType, MasterData } from '../types';
-import { X } from 'lucide-react';
+import { X, ArrowRight } from 'lucide-react';
 
 interface Props {
   parentRow: BudgetRow | null; // Nullable for Root level (Satker)
@@ -17,19 +16,24 @@ const AddRowModal: React.FC<Props> = ({ parentRow, masterData, onClose, onSave }
       if (!parentRow) return RowType.SATKER;
       switch (parentRow.type) {
           case RowType.SATKER: return RowType.PROGRAM;
-          case RowType.PROGRAM: return RowType.KRO;
+          case RowType.PROGRAM: return RowType.ACTIVITY; // Program -> Kegiatan
+          case RowType.ACTIVITY: return RowType.KRO;     // Kegiatan -> KRO
           case RowType.KRO: return RowType.RO;
           case RowType.RO: return RowType.COMPONENT;
           case RowType.COMPONENT: return RowType.SUBCOMPONENT;
-          case RowType.SUBCOMPONENT: return RowType.HEADER_ACCOUNT;
-          case RowType.HEADER_ACCOUNT: return RowType.ITEM;
-          case RowType.ITEM: return RowType.ITEM; // Detail
-          default: return RowType.ITEM;
+          case RowType.SUBCOMPONENT: return RowType.ACCOUNT; // SubKomponen -> Akun
+          case RowType.ACCOUNT: return RowType.DETAIL;      // Akun -> Detail
+          case RowType.DETAIL: return RowType.DETAIL;       // Detail -> Detail (Sibling/Child)
+          default: return RowType.DETAIL;
       }
   };
 
   const [type, setType] = useState<RowType>(getDefaultType());
   
+  // Determine if we are in Manual Input Mode (For Detail)
+  // This depends on the *selected type*, not just the parent.
+  const isManualMode = type === RowType.DETAIL;
+
   // Selection State
   const [selectedCode, setSelectedCode] = useState('');
   const [selectedDesc, setSelectedDesc] = useState('');
@@ -41,6 +45,17 @@ const AddRowModal: React.FC<Props> = ({ parentRow, masterData, onClose, onSave }
 
   // Helpers
   const currentOptions = masterData[type] || [];
+
+  // Reset fields when type changes
+  useEffect(() => {
+      if (type === RowType.DETAIL) {
+          setSelectedCode('-'); // Force dash for Detail
+          setSelectedDesc('');
+      } else {
+          setSelectedCode('');
+          setSelectedDesc('');
+      }
+  }, [type]);
 
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
       const idx = e.target.selectedIndex;
@@ -58,7 +73,7 @@ const AddRowModal: React.FC<Props> = ({ parentRow, masterData, onClose, onSave }
     e.preventDefault();
     
     if (!selectedCode || !selectedDesc) {
-        alert("Mohon pilih Kode dan Uraian");
+        alert("Mohon lengkapi Kode dan Uraian");
         return;
     }
 
@@ -72,7 +87,7 @@ const AddRowModal: React.FC<Props> = ({ parentRow, masterData, onClose, onSave }
 
     const newRow: BudgetRow = {
       id: newId,
-      code: selectedCode,
+      code: selectedCode, // Should be '-' for DETAIL
       description: selectedDesc,
       type: type,
       semula: null,
@@ -115,51 +130,86 @@ const AddRowModal: React.FC<Props> = ({ parentRow, masterData, onClose, onSave }
             <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Tipe Baris</label>
             <select 
                 value={type} 
-                onChange={e => {
-                    setType(e.target.value as RowType);
-                    setSelectedCode('');
-                    setSelectedDesc('');
-                }}
-                className="w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-blue-500"
+                onChange={e => setType(e.target.value as RowType)}
+                // Disable type change if parent is ACCOUNT (must add DETAIL) or DETAIL (must add sibling DETAIL)
+                // But allow if user really wants to change it (though structure dictates otherwise) - let's keep it flexible but guided
+                className={`w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-blue-500`}
             >
                 {!parentRow && <option value={RowType.SATKER}>Satuan Kerja</option>}
                 <option value={RowType.PROGRAM}>Program</option>
+                <option value={RowType.ACTIVITY}>Kegiatan</option>
                 <option value={RowType.KRO}>KRO (Keluaran)</option>
                 <option value={RowType.RO}>RO (Rincian Output)</option>
                 <option value={RowType.COMPONENT}>Komponen</option>
                 <option value={RowType.SUBCOMPONENT}>Sub Komponen</option>
-                <option value={RowType.HEADER_ACCOUNT}>Kelompok Akun (Header)</option>
-                <option value={RowType.ITEM}>Item (Akun 6 Digit)</option>
-                <option value={RowType.ITEM}>Rincian Item (Detail)</option>
+                <option value={RowType.ACCOUNT}>Akun (6 Digit)</option>
+                <option value={RowType.DETAIL}>Detail (Rincian Item)</option>
             </select>
+            {isManualMode && <p className="text-[10px] text-gray-500 mt-1">*Detail item ditambahkan secara manual (bukan master data)</p>}
           </div>
 
           <div className="border border-gray-200 rounded p-3 bg-gray-50">
              <div className="flex justify-between items-center mb-2">
-                 <label className="block text-xs font-semibold text-gray-500 uppercase">Pilih Kode & Uraian</label>
+                 <label className="block text-xs font-semibold text-gray-500 uppercase">
+                    {isManualMode ? "Input Detail (Manual)" : "Pilih Kode & Uraian (Master Data)"}
+                 </label>
              </div>
 
-             <select 
-                className="w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-blue-500"
-                onChange={handleSelectChange}
-                value={selectedCode ? currentOptions.find(o => o.code === selectedCode)?.desc : ''} 
-             >
-                <option value="">-- Pilih {type} --</option>
-                {currentOptions.length === 0 ? (
-                    <option value="" disabled>Data kosong. Tambahkan di menu Master Data.</option>
-                ) : (
-                    currentOptions.map((opt, idx) => (
-                        <option key={`${opt.code}-${idx}`} value={opt.desc}>
-                            [{opt.code}] {opt.desc}
-                        </option>
-                    ))
-                )}
-             </select>
-             
-             {selectedCode && (
-                 <div className="mt-2 text-xs text-gray-600 bg-white border p-2 rounded">
-                     <strong>Terpilih:</strong> [{selectedCode}] {selectedDesc}
+             {isManualMode ? (
+                 // --- MANUAL INPUT FOR DETAIL ---
+                 <div className="space-y-3">
+                    <div className="flex gap-2">
+                        <div className="w-1/4">
+                            <label className="text-[10px] text-gray-500 mb-1 block">Kode</label>
+                            <input 
+                                type="text" 
+                                value="-" 
+                                disabled 
+                                className="w-full border border-gray-300 bg-gray-200 text-gray-600 p-2 rounded text-center font-bold cursor-not-allowed"
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <label className="text-[10px] text-gray-500 mb-1 block">Uraian Detail</label>
+                            <input 
+                                type="text"
+                                placeholder="Contoh: Pembelian Kertas A4"
+                                autoFocus
+                                className="w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-blue-500"
+                                value={selectedDesc}
+                                onChange={e => setSelectedDesc(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <div className="text-[10px] text-orange-600 italic">
+                        * Kode Detail otomatis diset tanda strip (-). Uraian bebas.
+                    </div>
                  </div>
+             ) : (
+                 // --- MASTER DATA SELECT ---
+                 <>
+                    <select 
+                        className="w-full border border-gray-300 bg-white text-gray-900 p-2 rounded focus:ring-2 focus:ring-blue-500"
+                        onChange={handleSelectChange}
+                        value={selectedCode ? currentOptions.find(o => o.code === selectedCode)?.desc : ''} 
+                    >
+                        <option value="">-- Pilih {type} --</option>
+                        {currentOptions.length === 0 ? (
+                            <option value="" disabled>Data kosong. Tambahkan di menu Master Data.</option>
+                        ) : (
+                            currentOptions.map((opt, idx) => (
+                                <option key={`${opt.code}-${idx}`} value={opt.desc}>
+                                    [{opt.code}] {opt.desc}
+                                </option>
+                            ))
+                        )}
+                    </select>
+                    
+                    {selectedCode && (
+                        <div className="mt-2 text-xs text-gray-600 bg-white border p-2 rounded">
+                            <strong>Terpilih:</strong> [{selectedCode}] {selectedDesc}
+                        </div>
+                    )}
+                 </>
              )}
           </div>
 

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { BudgetRow, ThemeConfig, ChangeStatus, RowType, MasterData } from './types';
 import BudgetRowItem from './components/BudgetRowItem';
@@ -10,13 +8,21 @@ import BottomEditor from './components/BottomEditor';
 import AddRowModal from './components/AddRowModal';
 import MasterDataModal from './components/MasterDataModal';
 import ConfirmationModal from './components/ConfirmationModal';
-import { Eye, EyeOff, Moon, Sun, Settings2, CheckSquare, Square, ChevronDown, ChevronUp, ArrowDown, ArrowUp, Loader2, AlertCircle, Save, Database, PlusCircle, HelpCircle, Lock, Unlock } from 'lucide-react';
+import RevisionHistory from './components/RevisionHistory'; // Import new component
+import { Eye, EyeOff, Moon, Sun, Settings2, CheckSquare, Square, ChevronDown, ChevronUp, ArrowDown, ArrowUp, Loader2, AlertCircle, Save, Database, PlusCircle, HelpCircle, Lock, Unlock, Archive, X } from 'lucide-react';
 import { MONTH_NAMES, QUARTERS, defaultTheme, formatCurrency, getAccountPrefix, formatPercent, recalculateBudget } from './utils';
 import { api } from './api';
 import { initialData } from './data';
 
-function App() {
+export const App = () => {
   const [data, setData] = useState<BudgetRow[]>([]);
+  // Use ref to track latest data for async callbacks
+  const dataRef = useRef<BudgetRow[]>([]);
+
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
   const [masterData, setMasterData] = useState<MasterData>({});
   const [theme, setTheme] = useState<ThemeConfig>(defaultTheme);
   
@@ -52,10 +58,14 @@ function App() {
   const [expandedAnalysisQuarters, setExpandedAnalysisQuarters] = useState<number[]>([]);
 
   // Navigation & View State
-  const [currentView, setCurrentView] = useState<'table' | 'settings'>('table');
+  const [currentView, setCurrentView] = useState<'table' | 'settings' | 'history'>('table');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showMasterDataModal, setShowMasterDataModal] = useState(false);
+
+  // Snapshot Modal State (New)
+  const [showSnapshotModal, setShowSnapshotModal] = useState(false);
+  const [snapshotNote, setSnapshotNote] = useState('');
 
   // Selection State for Bottom Sheet
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
@@ -71,7 +81,7 @@ function App() {
       isOpen: boolean;
       title: string;
       message: string;
-      onConfirm: () => void;
+      onConfirm: () => void | Promise<void>;
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
 
@@ -104,14 +114,17 @@ function App() {
   }, []);
 
   // --- CONFIRMATION HELPER ---
-  const requestConfirmation = (title: string, message: string, action: () => void) => {
+  const requestConfirmation = (title: string, message: string, action: () => Promise<void> | void) => {
       setConfirmConfig({
           isOpen: true,
           title,
           message,
-          onConfirm: () => {
-              action();
-              setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+          onConfirm: async () => {
+              try {
+                  await action();
+              } finally {
+                  setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+              }
           }
       });
   };
@@ -130,6 +143,62 @@ function App() {
       } finally {
         setIsSaving(false);
       }
+  };
+
+  // --- REVISION SNAPSHOT UI HANDLER ---
+  const handleOpenSnapshotModal = () => {
+      // Set default note
+      setSnapshotNote(`Revisi ${new Date().toLocaleString('id-ID', { 
+        day: 'numeric', 
+        month: 'long', 
+        hour: '2-digit', 
+        minute: '2-digit',
+        timeZone: 'Asia/Jakarta' 
+      })}`);
+      setShowSnapshotModal(true);
+  };
+
+  // --- ACTUAL SNAPSHOT SAVING LOGIC ---
+  const handleConfirmSnapshot = async () => {
+      if (!snapshotNote.trim()) {
+          alert("Mohon isi catatan revisi.");
+          return;
+      }
+
+      setIsSaving(true);
+      try {
+          if (!dataRef.current || dataRef.current.length === 0) {
+              throw new Error("Tidak ada data untuk disimpan.");
+          }
+          
+          // Call API
+          await api.createRevision(snapshotNote, dataRef.current);
+          
+          // Close modal immediately
+          setShowSnapshotModal(false);
+          setIsSaving(false);
+
+          // Show success and offer navigation
+          setTimeout(() => {
+             if (confirm("Snapshot revisi berhasil disimpan! Apakah Anda ingin melihat riwayat revisi sekarang?")) {
+                 setCurrentView('history');
+             }
+          }, 100);
+
+      } catch(e: any) {
+          setIsSaving(false);
+          alert("Gagal menyimpan snapshot: " + e.message);
+      }
+  };
+
+  const handleRestoreRevision = (restoredData: BudgetRow[]) => {
+      // 1. Update State
+      setData(restoredData);
+      // 2. Persist as current data
+      handleSaveBudget(restoredData);
+      // 3. Switch view back to table
+      setCurrentView('table');
+      alert("Data berhasil dipulihkan dan diset sebagai kondisi saat ini.");
   };
 
   const handleInitializeData = async () => {
@@ -190,7 +259,7 @@ function App() {
       }
   };
 
-  // --- CLICK OUTSIDE HANDLER FOR MENU ---
+  // --- CLICK OUTSIDE HANDLER FOR MENUS ---
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (viewMenuRef.current && !viewMenuRef.current.contains(event.target as Node)) {
@@ -432,6 +501,10 @@ function App() {
   const getSelisihOffset = () => descWidth + (showSemula ? semulaWidth : 0) + (showMenjadi ? menjadiWidth : 0);
   const getEfisiensiOffset = () => descWidth + (showSemula ? semulaWidth : 0) + (showMenjadi ? menjadiWidth : 0) + (showSelisih ? selisihWidth : 0);
 
+  // Style correction for Sticky Header Gaps (Dynamic based on theme)
+  const headerBorderColor = isDarkMode ? '#4b5563' : '#d1d5db';
+  const stickyHeaderGapStyle = { boxShadow: `-1px 0 0 0 ${headerBorderColor}` };
+
   // --- CALCULATE GRAND TOTALS AND ANALYSIS ---
   const { grandTotals, analysisData } = useMemo(() => {
       const totals = {
@@ -470,11 +543,14 @@ function App() {
                   totals.menjadi += men;
                   
                   // Accumulate Pagu for analysis
-                  for (let m = 0; m < 12; m++) {
-                      if (analysis.months[m][prefix]) {
-                        analysis.months[m][prefix].pagu += men;
-                      } else if (analysis.months[m]['OTHER']) {
-                        analysis.months[m]['OTHER'].pagu += men;
+                  // Fix: Pagu bersih is calculated by excluding BLOCKED items
+                  if (!row.isBlocked) {
+                      for (let m = 0; m < 12; m++) {
+                          if (analysis.months[m][prefix]) {
+                            analysis.months[m][prefix].pagu += men;
+                          } else if (analysis.months[m]['OTHER']) {
+                            analysis.months[m]['OTHER'].pagu += men;
+                          }
                       }
                   }
 
@@ -512,8 +588,7 @@ function App() {
   }, [data]);
 
   const renderAnalysisTable = (index: number, type: 'month' | 'quarter') => {
-    // Collect data
-    let aggregatedData = {
+      let aggregatedData = {
         '51': { rpd: 0, sp2d: 0, realization: 0, pagu: 0 },
         '52': { rpd: 0, sp2d: 0, realization: 0, pagu: 0 },
         '53': { rpd: 0, sp2d: 0, realization: 0, pagu: 0 },
@@ -537,7 +612,6 @@ function App() {
         });
     });
 
-    // Fix Pagu for Quarter (Take from first month, as Pagu is annual ceiling)
     ['51', '52', '53', 'OTHER'].forEach(key => {
          const firstMonth = monthsToProcess[0];
          aggregatedData[key as keyof typeof aggregatedData].pagu = analysisData.months[firstMonth][key].pagu;
@@ -545,7 +619,6 @@ function App() {
 
     const isJan = type === 'month' && index === 0;
 
-    // Helper to calculate totals for a specific dataset
     const calculateTotals = (data: typeof aggregatedData, valueExtractor: (d: any) => number) => {
         const total = { rpd: 0, sp2d: 0, realization: 0, pagu: 0, targetValue: 0 };
         Object.values(data).forEach(val => {
@@ -558,24 +631,28 @@ function App() {
         return total;
     };
 
-    const renderSingleTable = (title: string, valueExtractor: (d: any) => number, showOmSpan: boolean = true) => {
+    const renderSingleTable = (title: string, valueExtractor: (d: any) => number) => {
         const totalRow = calculateTotals(aggregatedData, valueExtractor);
 
         const renderRow = (label: string, data: { rpd: number, sp2d: number, realization: number, pagu: number }, isTotal = false) => {
+            // Updated Logic based on specs
             const targetValue = valueExtractor(data);
-            const percentTarget = data.pagu > 0 ? (targetValue / data.pagu) * 100 : 0;
-            // Deviation for Analysis: Total Realization (SP2D + Realization?? No, usually Target vs Realization)
-            // Sticking to previous logic: Total Realization = SP2D + Realization (Akan)
-            // But for these split tables:
-            // Table 1 (Realisasi/RPD): Comparison is usually RPD vs Pagu? Or SP2D vs RPD?
-            // Let's use the generic logic: Deviation = (SP2D + Realization) - Target.
-            const totalRealization = data.sp2d + data.realization;
-            const deviation = totalRealization - targetValue;
+            const pagu = data.pagu;
+            const omSpan = data.sp2d;
             
+            // % Target = (Target / Pagu) * 100
+            const percentTarget = pagu > 0 ? (targetValue / pagu) * 100 : 0;
+            
+            // Margin 5%
             const marginMin = targetValue * 0.95;
             const marginMax = targetValue * 1.05;
 
-            // Colors
+            // Realisasi (SP2D)
+            const realisasi = omSpan; 
+
+            // Deviasi = Realisasi (SP2D) - Target
+            const deviation = realisasi - targetValue;
+            
             const devColor = deviation !== 0 ? 'bg-red-500 text-white' : 'bg-green-100 text-green-800';
             const textColorClass = isDarkMode ? 'text-gray-200' : 'text-gray-900';
             const bgClass = isTotal 
@@ -586,8 +663,8 @@ function App() {
                 <tr className={`${isTotal ? 'font-bold' : ''} ${bgClass} border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'} ${textColorClass}`}>
                     <td className="p-2 border-r text-left w-32 border-gray-300">{label}</td>
                     <td className="p-2 border-r text-right w-28 border-gray-300">{formatCurrency(targetValue)}</td>
-                    <td className={`p-2 border-r text-right w-28 border-gray-300 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>{showOmSpan ? formatCurrency(data.sp2d) : '-'}</td>
-                    <td className="p-2 border-r text-right w-28 border-gray-300">{formatCurrency(data.pagu)}</td>
+                    <td className={`p-2 border-r text-right w-28 border-gray-300 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>{formatCurrency(omSpan)}</td>
+                    <td className="p-2 border-r text-right w-28 border-gray-300">{formatCurrency(pagu)}</td>
                     <td className="p-2 border-r text-center w-16 border-gray-300">{percentTarget.toFixed(2)}%</td>
                     
                     {!isJan && (
@@ -598,7 +675,7 @@ function App() {
                             <td className="p-2 border-r text-right text-[10px] text-gray-500 w-24 border-gray-300 bg-gray-50">
                                 {formatCurrency(marginMax)}
                             </td>
-                            <td className="p-2 border-r text-right font-medium text-blue-700 w-28 border-gray-300">{formatCurrency(totalRealization)}</td>
+                            <td className="p-2 border-r text-right font-medium text-blue-700 w-28 border-gray-300">{formatCurrency(realisasi)}</td>
                             <td className={`p-2 text-right font-bold w-28 border-gray-300 ${devColor}`}>{formatCurrency(deviation)}</td>
                         </>
                     )}
@@ -621,7 +698,7 @@ function App() {
                             <th className="p-2 border border-gray-300">% TARGET</th>
                             {!isJan && (
                                 <>
-                                    <th className="p-2 border border-gray-300" colSpan={2}>MARGIN 5%</th>
+                                    <th className="p-2 border border-gray-300" colSpan={2}>MARGIN 5% (Min - Max)</th>
                                     <th className="p-2 border border-gray-300">REALISASI</th>
                                     <th className="p-2 border border-gray-300">DEVIASI</th>
                                 </>
@@ -639,21 +716,7 @@ function App() {
         );
     };
 
-    if (type === 'month') {
-        return (
-            <div className="flex flex-col gap-4">
-                 {renderSingleTable(`JUMLAH REALISASI: ${MONTH_NAMES[index]}`, (d) => d.rpd, true)}
-                 {renderSingleTable(`JUMLAH AKAN DIREALISASI: ${MONTH_NAMES[index]}`, (d) => d.realization, false)}
-                 {renderSingleTable(`TOTAL per Bulan: ${MONTH_NAMES[index]}`, (d) => d.rpd + d.realization, true)}
-            </div>
-        );
-    } else {
-        // Quarter View - Keep as single aggregate Total
-        return renderSingleTable(`TOTAL per Triwulan: ${QUARTERS[index].name}`, (d) => d.rpd + d.realization, true);
-    }
-  };
-
-  if (isLoading) {
+    if (isLoading) {
       return (
           <div className="h-screen flex items-center justify-center bg-gray-50 flex-col gap-4">
               <Loader2 className="animate-spin text-blue-600" size={48} />
@@ -703,113 +766,24 @@ function App() {
 
   // Style constants for footer cells - NO STICKY (Static positioning)
   const footerCellClass = `border-r border-t border-gray-300 ${isDarkMode ? 'bg-gray-700 border-gray-500 text-gray-200' : 'bg-gray-200 border-gray-400 text-gray-800'} font-bold text-[11px]`;
-  // Updated: Sticky class for frozen columns in footer
   const footerStickyCellClass = `${footerCellClass} sticky z-[40]`;
   const footerFirstCellClass = `border-r border-t border-gray-300 px-2 h-10 align-middle w-[350px] min-w-[350px] max-w-[350px] ${isDarkMode ? 'bg-gray-700 border-gray-500 text-gray-200' : 'bg-gray-200 border-gray-400 text-gray-800'} font-bold sticky left-0 z-[40]`;
   
-  // Regular classes for analysis row
   const analysisCellClass = `border-r border-t border-gray-300 align-top ${isDarkMode ? 'bg-gray-900 border-gray-700' : 'bg-gray-50'}`;
-  // Updated: Sticky class for frozen columns in analysis
   const analysisStickyCellClass = `${analysisCellClass} sticky z-[40]`;
   const analysisFirstCellClass = `border-r border-t border-gray-300 px-2 h-10 align-middle w-[350px] min-w-[350px] max-w-[350px] sticky left-0 z-[40] ${isDarkMode ? 'bg-gray-900 border-gray-700' : 'bg-gray-50'}`;
 
-  return (
-    <div className={`h-screen flex ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-800'} font-sans overflow-hidden transition-colors duration-300`}>
-      <Sidebar 
-        currentView={currentView} 
-        onChangeView={setCurrentView} 
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        onOpenMasterData={() => setShowMasterDataModal(true)}
-        isDarkMode={isDarkMode}
-      />
-
-      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 relative">
-        <div className={`${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-4 shadow-sm border-b z-[80] flex-shrink-0 transition-colors`}>
-            <div className="flex justify-between items-center mb-0">
-                <div>
-                <h1 className={`text-xl font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-900'}`}>
-                    Sistem Revisi & RPD
-                    {isSaving && <span className="ml-3 text-xs font-normal text-green-600 animate-pulse flex inline-flex items-center gap-1"><Loader2 size={10} className="animate-spin"/> Menyimpan...</span>}
-                    {isRevisionMode && <span className="ml-3 text-xs font-bold text-white bg-orange-600 px-2 py-0.5 rounded animate-pulse">MODE REVISI AKTIF</span>}
-                </h1>
-                <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-xs mt-1`}>Satuan Kerja: BPS Kota Gunungsitoli</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    
-                    {/* REVISION MODE TOGGLE */}
-                     <button 
-                        onClick={() => setIsRevisionMode(!isRevisionMode)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm border ${isRevisionMode 
-                            ? 'bg-orange-600 text-white border-orange-700 hover:bg-orange-700' 
-                            : (isDarkMode ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200')}`}
-                        title={isRevisionMode ? "Matikan Mode Revisi" : "Aktifkan Mode Revisi"}
-                    >
-                        {isRevisionMode ? <Lock size={14} /> : <Unlock size={14} />}
-                        {isRevisionMode ? "Mode Revisi ON" : "Mode Revisi OFF"}
-                    </button>
-
-                    {/* HINTS POPUP */}
-                    <div 
-                        className="relative group"
-                        onMouseEnter={() => setIsLegendOpen(true)}
-                        onMouseLeave={() => setIsLegendOpen(false)}
-                    >
-                        <button 
-                            className={`p-2 rounded-full ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'} hover:bg-blue-100 hover:text-blue-600 transition-all`}
-                            onClick={() => setIsLegendOpen(!isLegendOpen)}
-                            title="Keterangan Warna"
-                        >
-                            <HelpCircle size={18} />
-                        </button>
-                        
-                        {(isLegendOpen) && (
-                            <div className="absolute right-0 top-full mt-2 w-72 bg-white shadow-xl rounded-lg p-3 z-[100] border border-gray-200 animate-in fade-in zoom-in-95 duration-200">
-                                <Legend />
-                                <div className="absolute top-0 right-4 w-3 h-3 bg-white border-t border-l border-gray-200 transform rotate-45 -mt-1.5"></div>
-                            </div>
-                        )}
-                    </div>
-
-                    <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-full ${isDarkMode ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-200 text-gray-600'} hover:opacity-80 transition-all`}>
-                        {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-                    </button>
-                    {currentView === 'table' && (
-                    <div className="relative" ref={viewMenuRef}>
-                        <button 
-                            onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded shadow-sm border text-sm font-medium transition-colors ${isViewMenuOpen ? 'bg-blue-100 border-blue-400 text-blue-800' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-                        >
-                            <Settings2 size={16}/> Atur Tampilan
-                            {isViewMenuOpen ? <ChevronUp size={14} className="ml-1"/> : <ChevronDown size={14} className="ml-1"/>}
-                        </button>
-                        {isViewMenuOpen && (
-                            <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-[70] p-3 animate-in fade-in zoom-in-95 duration-100 text-gray-800">
-                                {/* View Options */}
-                                <div className="text-[10px] font-bold text-gray-500 px-2 mb-2 uppercase tracking-wide">Kolom Data</div>
-                                <button onClick={() => setShowSemula(!showSemula)} className="w-full flex items-center justify-between px-2 py-2 hover:bg-gray-50 rounded text-sm mb-1 group"><span className="text-gray-700 font-medium">Semula</span>{showSemula ? <Eye size={16} className="text-blue-600"/> : <EyeOff size={16} className="text-gray-400 group-hover:text-gray-600"/>}</button>
-                                <button onClick={() => setShowMenjadi(!showMenjadi)} className="w-full flex items-center justify-between px-2 py-2 hover:bg-gray-50 rounded text-sm mb-1 group"><span className="text-gray-700 font-medium">Menjadi</span>{showMenjadi ? <Eye size={16} className="text-yellow-600"/> : <EyeOff size={16} className="text-gray-400 group-hover:text-gray-600"/>}</button>
-                                <button onClick={() => setShowSelisih(!showSelisih)} className="w-full flex items-center justify-between px-2 py-2 hover:bg-gray-50 rounded text-sm mb-1 group"><span className="text-gray-700 font-medium">Selisih</span>{showSelisih ? <Eye size={16} className="text-orange-600"/> : <EyeOff size={16} className="text-gray-400 group-hover:text-gray-600"/>}</button>
-                                <button onClick={() => setShowEfisiensi(!showEfisiensi)} className="w-full flex items-center justify-between px-2 py-2 hover:bg-gray-50 rounded text-sm mb-2 group"><span className="text-gray-700 font-medium">Efisiensi</span>{showEfisiensi ? <Eye size={16} className="text-emerald-600"/> : <EyeOff size={16} className="text-gray-400 group-hover:text-gray-600"/>}</button>
-                                <div className="border-t my-2"></div>
-                                <div className="text-[10px] font-bold text-gray-500 px-2 mb-2 uppercase tracking-wide">Periode Triwulan</div>
-                                {QUARTERS.map((q, idx) => (
-                                    <button key={q.name} onClick={() => toggleQuarterVisibility(idx)} className="w-full flex items-center justify-between px-2 py-2 hover:bg-gray-50 rounded text-sm"><span className="text-gray-700">{q.name}</span>{visibleQuarterIndices.includes(idx) ? <CheckSquare size={16} className="text-purple-600"/> : <Square size={16} className="text-gray-300"/>}</button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                    )}
-                </div>
-            </div>
-            {/* Legend removed from here */}
-        </div>
-
-        {currentView === 'settings' ? (
-          <div className="flex-1 overflow-auto">
-             <Settings theme={theme} onUpdateTheme={handleSaveTheme} onReset={() => handleSaveTheme(defaultTheme)} />
-          </div>
-        ) : (
+  // RENDER CONTENT SWITCH
+  const renderContent = () => {
+      if (currentView === 'settings') {
+          return <div className="flex-1 overflow-auto"><Settings theme={theme} onUpdateTheme={handleSaveTheme} onReset={() => handleSaveTheme(defaultTheme)} /></div>;
+      }
+      if (currentView === 'history') {
+          return <div className="flex-1 overflow-auto"><RevisionHistory isDarkMode={isDarkMode} onRestore={handleRestoreRevision} /></div>;
+      }
+      
+      // TABLE VIEW
+      return (
           <div ref={tableContainerRef} className="flex-1 overflow-auto relative w-full pb-20 scroll-smooth">
             <div className="inline-block min-w-full align-middle">
               <table className="min-w-full border-separate border-spacing-0">
@@ -828,10 +802,10 @@ function App() {
                             </button>
                         </div>
                     </th>
-                    {showSemula && <th className="sticky z-[60] bg-gray-700 text-white border-r border-b border-gray-600 text-center" style={{ left: `${getSemulaOffset()}px`, minWidth: `${semulaWidth}px` }} colSpan={4} rowSpan={2}>SEMULA</th>}
-                    {showMenjadi && <th className="sticky z-[60] bg-yellow-600 text-white border-r border-b border-yellow-500 text-center" style={{ left: `${getMenjadiOffset()}px`, minWidth: `${menjadiWidth}px` }} colSpan={4} rowSpan={2}>MENJADI</th>}
-                    {showSelisih && <th className="sticky z-[60] bg-orange-600 text-white border-r border-b border-orange-500 text-center" style={{ left: `${getSelisihOffset()}px`, minWidth: `${selisihWidth}px` }} colSpan={1} rowSpan={2}>SELISIH</th>}
-                    {showEfisiensi && <th className="sticky z-[60] bg-emerald-600 text-white border-r border-b border-emerald-500 text-center" style={{ left: `${getEfisiensiOffset()}px`, minWidth: `${efisiensiWidth}px` }} colSpan={2} rowSpan={2}>EFISIENSI ANGGARAN</th>}
+                    {showSemula && <th className="sticky z-[60] bg-gray-700 text-white border-r border-b border-gray-600 text-center" style={{ left: `${getSemulaOffset()}px`, minWidth: `${semulaWidth}px`, ...stickyHeaderGapStyle }} colSpan={4} rowSpan={2}>SEMULA</th>}
+                    {showMenjadi && <th className="sticky z-[60] bg-yellow-600 text-white border-r border-b border-yellow-500 text-center" style={{ left: `${getMenjadiOffset()}px`, minWidth: `${menjadiWidth}px`, ...stickyHeaderGapStyle }} colSpan={4} rowSpan={2}>MENJADI</th>}
+                    {showSelisih && <th className="sticky z-[60] bg-orange-600 text-white border-r border-b border-orange-500 text-center" style={{ left: `${getSelisihOffset()}px`, minWidth: `${selisihWidth}px`, ...stickyHeaderGapStyle }} colSpan={1} rowSpan={2}>SELISIH</th>}
+                    {showEfisiensi && <th className="sticky z-[60] bg-emerald-600 text-white border-r border-b border-emerald-500 text-center" style={{ left: `${getEfisiensiOffset()}px`, minWidth: `${efisiensiWidth}px`, ...stickyHeaderGapStyle }} colSpan={2} rowSpan={2}>EFISIENSI ANGGARAN</th>}
                     {visibleQuarters.map((q, idx) => <th key={q.name} colSpan={(q.months.length * 8) + 3} className={`text-center border-r border-b border-gray-300 text-sm font-bold ${isDarkMode ? 'bg-gray-700 text-gray-200' : 'text-gray-900'} ${idx % 2 === 0 ? (isDarkMode ? 'bg-purple-900/50' : 'bg-purple-100') : (isDarkMode ? 'bg-blue-900/50' : 'bg-blue-100')}`}>{q.name}</th>)}
                   </tr>
                   <tr className="h-10">
@@ -839,10 +813,10 @@ function App() {
                   </tr>
                   <tr className="h-8">
                      {/* Subheaders */}
-                     {showSemula && <><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`} style={{ left: `${getSemulaOffset()}px`, width: `${volValWidth + volUnitWidth}px` }} colSpan={2}>Vol</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`} style={{ left: `${getSemulaOffset() + volValWidth + volUnitWidth}px`, width: `${priceWidth}px` }}>Harga</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`} style={{ left: `${getSemulaOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${totalWidth}px` }}>Total</th></>}
-                     {showMenjadi && <><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-yellow-900/50 text-gray-300' : 'bg-yellow-100 text-gray-800'}`} style={{ left: `${getMenjadiOffset()}px`, width: `${volValWidth + volUnitWidth}px` }} colSpan={2}>Vol</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-yellow-900/50 text-gray-300' : 'bg-yellow-100 text-gray-800'}`} style={{ left: `${getMenjadiOffset() + volValWidth + volUnitWidth}px`, width: `${priceWidth}px` }}>Harga</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-yellow-900/50 text-gray-300' : 'bg-yellow-100 text-gray-800'}`} style={{ left: `${getMenjadiOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${totalWidth}px` }}>Total</th></>}
-                     {showSelisih && <th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-orange-900/50 text-gray-300' : 'bg-orange-100 text-gray-800'}`} style={{ left: `${getSelisihOffset()}px`, width: `${selisihWidth}px` }}>Nilai</th>}
-                     {showEfisiensi && <><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-emerald-900/50 text-gray-300' : 'bg-emerald-100 text-gray-800'}`} style={{ left: `${getEfisiensiOffset()}px`, width: '90px' }}>Rincian</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-emerald-900/50 text-gray-300' : 'bg-emerald-100 text-gray-800'}`} style={{ left: `${getEfisiensiOffset() + 90}px`, width: '90px' }}>Total</th></>}
+                     {showSemula && <><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`} style={{ left: `${getSemulaOffset()}px`, width: `${volValWidth + volUnitWidth}px`, ...stickyHeaderGapStyle }} colSpan={2}>Vol</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`} style={{ left: `${getSemulaOffset() + volValWidth + volUnitWidth}px`, width: `${priceWidth}px` }}>Harga</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-gray-600 text-gray-300' : 'bg-gray-200 text-gray-700'}`} style={{ left: `${getSemulaOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${totalWidth}px` }}>Total</th></>}
+                     {showMenjadi && <><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-yellow-900/50 text-gray-300' : 'bg-yellow-100 text-gray-800'}`} style={{ left: `${getMenjadiOffset()}px`, width: `${volValWidth + volUnitWidth}px`, ...stickyHeaderGapStyle }} colSpan={2}>Vol</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-yellow-900/50 text-gray-300' : 'bg-yellow-100 text-gray-800'}`} style={{ left: `${getMenjadiOffset() + volValWidth + volUnitWidth}px`, width: `${priceWidth}px` }}>Harga</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-yellow-900/50 text-gray-300' : 'bg-yellow-100 text-gray-800'}`} style={{ left: `${getMenjadiOffset() + volValWidth + volUnitWidth + priceWidth}px`, width: `${totalWidth}px` }}>Total</th></>}
+                     {showSelisih && <th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-orange-900/50 text-gray-300' : 'bg-orange-100 text-gray-800'}`} style={{ left: `${getSelisihOffset()}px`, width: `${selisihWidth}px`, ...stickyHeaderGapStyle }}>Nilai</th>}
+                     {showEfisiensi && <><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-emerald-900/50 text-gray-300' : 'bg-emerald-100 text-gray-800'}`} style={{ left: `${getEfisiensiOffset()}px`, width: '90px', ...stickyHeaderGapStyle }}>Rincian</th><th className={`sticky z-[60] border-r border-b border-gray-300 text-xs p-1 ${isDarkMode ? 'bg-emerald-900/50 text-gray-300' : 'bg-emerald-100 text-gray-800'}`} style={{ left: `${getEfisiensiOffset() + 90}px`, width: '90px' }}>Total</th></>}
                      {visibleQuarters.map(q => q.months.map(m => (<React.Fragment key={`headers-${m}`}><th className={`border-r border-b border-gray-300 text-[9px] min-w-[80px] font-normal px-1 ${isDarkMode ? 'bg-pink-900/50 text-gray-300' : 'bg-pink-100 text-gray-800'}`}>Jml Realisasi</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[80px] font-normal px-1 ${isDarkMode ? 'bg-pink-900/50 text-gray-300' : 'bg-pink-100 text-gray-800'}`}>Jml Akan Real</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[90px] font-bold px-1 ${isDarkMode ? 'bg-pink-800/50 text-gray-300' : 'bg-pink-200 text-gray-800'}`}>TOTAL</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[70px] font-normal px-1 ${isDarkMode ? 'bg-purple-900/50 text-gray-300' : 'bg-purple-100 text-gray-800'}`}>Tgl</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[90px] font-normal px-1 ${isDarkMode ? 'bg-purple-900/50 text-gray-300' : 'bg-purple-100 text-gray-800'}`}>No. SPM</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[30px] font-normal px-1 ${isDarkMode ? 'bg-cyan-900/50 text-gray-300' : 'bg-cyan-100 text-gray-800'}`}>Cek</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[90px] font-normal px-1 ${isDarkMode ? 'bg-green-900/50 text-gray-300' : 'bg-green-100 text-gray-800'}`}>SP2D</th><th className={`border-r border-b border-gray-300 text-[9px] min-w-[90px] font-normal px-1 ${isDarkMode ? 'bg-red-900/50 text-gray-300' : 'bg-red-100 text-gray-800'}`}>Selisih</th></React.Fragment>)))}
                   </tr>
                 </thead>
@@ -865,6 +839,7 @@ function App() {
                       visibleQuarters={visibleQuarters}
                       theme={theme}
                       isRevisionMode={isRevisionMode}
+                      isDarkMode={isDarkMode}
                       offsets={{
                           semula: getSemulaOffset(),
                           menjadi: getMenjadiOffset(),
@@ -944,7 +919,116 @@ function App() {
               </table>
             </div>
           </div>
-        )}
+      );
+  };
+
+  return (
+    <div className={`h-screen flex ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-800'} font-sans overflow-hidden transition-colors duration-300`}>
+      <Sidebar 
+        currentView={currentView} 
+        onChangeView={setCurrentView} 
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        onOpenMasterData={() => setShowMasterDataModal(true)}
+        isDarkMode={isDarkMode}
+      />
+
+      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 relative">
+        <div className={`${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} p-4 shadow-sm border-b z-[80] flex-shrink-0 transition-colors`}>
+            <div className="flex justify-between items-center mb-0">
+                <div>
+                <h1 className={`text-xl font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-900'}`}>
+                    Sistem Revisi & RPD
+                    {isSaving && <span className="ml-3 text-xs font-normal text-green-600 animate-pulse flex inline-flex items-center gap-1"><Loader2 size={10} className="animate-spin"/> Menyimpan...</span>}
+                    {isRevisionMode && <span className="ml-3 text-xs font-bold text-white bg-orange-600 px-2 py-0.5 rounded animate-pulse">MODE REVISI AKTIF</span>}
+                </h1>
+                <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-xs mt-1`}>Satuan Kerja: BPS Kota Gunungsitoli</p>
+                </div>
+                <div className="flex items-center gap-3">
+
+                    {/* SAVE SNAPSHOT BUTTON (Only visible in Revision Mode) */}
+                    {isRevisionMode && (
+                        <button 
+                            onClick={handleOpenSnapshotModal}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm border ${isDarkMode ? 'bg-blue-900 text-blue-200 border-blue-700 hover:bg-blue-800' : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'}`}
+                            title="Simpan kondisi saat ini ke riwayat"
+                        >
+                            <Archive size={14} />
+                            Simpan Snapshot Revisi
+                        </button>
+                    )}
+
+                    {/* REVISION MODE TOGGLE */}
+                     <button 
+                        onClick={() => setIsRevisionMode(!isRevisionMode)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm border ${isRevisionMode 
+                            ? 'bg-orange-600 text-white border-orange-700 hover:bg-orange-700' 
+                            : (isDarkMode ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200')}`}
+                        title={isRevisionMode ? "Matikan Mode Revisi" : "Aktifkan Mode Revisi"}
+                    >
+                        {isRevisionMode ? <Lock size={14} /> : <Unlock size={14} />}
+                        {isRevisionMode ? "Mode Revisi ON" : "Mode Revisi OFF"}
+                    </button>
+
+                    {/* HINTS POPUP */}
+                    <div 
+                        className="relative"
+                        onMouseEnter={() => setIsLegendOpen(true)}
+                        onMouseLeave={() => setIsLegendOpen(false)}
+                    >
+                        <button 
+                            className={`p-2 rounded-full ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'} hover:bg-blue-100 hover:text-blue-600 transition-all`}
+                            onClick={() => setIsLegendOpen(!isLegendOpen)}
+                            title="Keterangan Warna"
+                        >
+                            <HelpCircle size={18} />
+                        </button>
+                        
+                        {(isLegendOpen) && (
+                            <div className="absolute right-0 top-full pt-2 w-72 z-[100] animate-in fade-in zoom-in-95 duration-200">
+                                <div className="bg-white shadow-xl rounded-lg p-3 border border-gray-200 relative">
+                                    <Legend />
+                                    <div className="absolute -top-1.5 right-4 w-3 h-3 bg-white border-t border-l border-gray-200 transform rotate-45"></div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-full ${isDarkMode ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-200 text-gray-600'} hover:opacity-80 transition-all`}>
+                        {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+                    </button>
+                    {currentView === 'table' && (
+                    <div className="relative" ref={viewMenuRef}>
+                        <button 
+                            onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded shadow-sm border text-sm font-medium transition-colors ${isViewMenuOpen ? 'bg-blue-100 border-blue-400 text-blue-800' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                        >
+                            <Settings2 size={16}/> Atur Tampilan
+                            {isViewMenuOpen ? <ChevronUp size={14} className="ml-1"/> : <ChevronDown size={14} className="ml-1"/>}
+                        </button>
+                        {isViewMenuOpen && (
+                            <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-[70] p-3 animate-in fade-in zoom-in-95 duration-100 text-gray-800">
+                                {/* View Options */}
+                                <div className="text-[10px] font-bold text-gray-500 px-2 mb-2 uppercase tracking-wide">Kolom Data</div>
+                                <button onClick={() => setShowSemula(!showSemula)} className="w-full flex items-center justify-between px-2 py-2 hover:bg-gray-50 rounded text-sm mb-1 group"><span className="text-gray-700 font-medium">Semula</span>{showSemula ? <Eye size={16} className="text-blue-600"/> : <EyeOff size={16} className="text-gray-400 group-hover:text-gray-600"/>}</button>
+                                <button onClick={() => setShowMenjadi(!showMenjadi)} className="w-full flex items-center justify-between px-2 py-2 hover:bg-gray-50 rounded text-sm mb-1 group"><span className="text-gray-700 font-medium">Menjadi</span>{showMenjadi ? <Eye size={16} className="text-yellow-600"/> : <EyeOff size={16} className="text-gray-400 group-hover:text-gray-600"/>}</button>
+                                <button onClick={() => setShowSelisih(!showSelisih)} className="w-full flex items-center justify-between px-2 py-2 hover:bg-gray-50 rounded text-sm mb-1 group"><span className="text-gray-700 font-medium">Selisih</span>{showSelisih ? <Eye size={16} className="text-orange-600"/> : <EyeOff size={16} className="text-gray-400 group-hover:text-gray-600"/>}</button>
+                                <button onClick={() => setShowEfisiensi(!showEfisiensi)} className="w-full flex items-center justify-between px-2 py-2 hover:bg-gray-50 rounded text-sm mb-2 group"><span className="text-gray-700 font-medium">Efisiensi</span>{showEfisiensi ? <Eye size={16} className="text-emerald-600"/> : <EyeOff size={16} className="text-gray-400 group-hover:text-gray-600"/>}</button>
+                                <div className="border-t my-2"></div>
+                                <div className="text-[10px] font-bold text-gray-500 px-2 mb-2 uppercase tracking-wide">Periode Triwulan</div>
+                                {QUARTERS.map((q, idx) => (
+                                    <button key={q.name} onClick={() => toggleQuarterVisibility(idx)} className="w-full flex items-center justify-between px-2 py-2 hover:bg-gray-50 rounded text-sm"><span className="text-gray-700">{q.name}</span>{visibleQuarterIndices.includes(idx) ? <CheckSquare size={16} className="text-purple-600"/> : <Square size={16} className="text-gray-300"/>}</button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    )}
+                </div>
+            </div>
+            {/* Legend removed from here */}
+        </div>
+
+        {renderContent()}
         
         {/* Pass Confirmation Wrapped Function to Editor */}
         <BottomEditor 
@@ -986,9 +1070,55 @@ function App() {
             isLoading={isSaving}
         />
 
+        {/* --- CUSTOM SNAPSHOT MODAL (Replaces native prompt) --- */}
+        {showSnapshotModal && (
+            <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                <div className={`rounded-lg shadow-xl w-full max-w-sm overflow-hidden ${isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white'}`}>
+                    <div className={`flex justify-between items-center p-4 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                        <h3 className={`font-bold ${isDarkMode ? 'text-gray-100' : 'text-gray-800'}`}>Simpan Snapshot Revisi</h3>
+                        <button onClick={() => setShowSnapshotModal(false)} className={`${isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <div className="p-6">
+                         <p className={`text-sm mb-3 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                            Masukkan label/catatan untuk snapshot ini agar mudah dikenali di riwayat (Contoh: "Revisi POK 1 - Final").
+                         </p>
+                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Catatan Revisi</label>
+                         <input 
+                            type="text" 
+                            className={`w-full border rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'}`}
+                            placeholder="Contoh: Revisi POK 1"
+                            value={snapshotNote}
+                            onChange={(e) => setSnapshotNote(e.target.value)}
+                            autoFocus
+                         />
+                    </div>
+                    <div className={`p-4 border-t flex justify-end gap-2 ${isDarkMode ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                        <button 
+                            onClick={() => setShowSnapshotModal(false)}
+                            disabled={isSaving}
+                            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-200'}`}
+                        >
+                            Batal
+                        </button>
+                        <button 
+                            onClick={handleConfirmSnapshot}
+                            disabled={isSaving}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition-colors flex items-center gap-2"
+                        >
+                            {isSaving ? (
+                                <><Loader2 size={16} className="animate-spin" /> Menyimpan...</>
+                            ) : (
+                                <><Save size={16} /> Simpan Snapshot</>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
       </div>
     </div>
   );
 }
-
-export default App;

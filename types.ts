@@ -1,14 +1,14 @@
 
-
 export enum RowType {
-  SATKER = 'SATKER', // New Root Level
+  SATKER = 'SATKER', 
   PROGRAM = 'PROGRAM',
-  KRO = 'KRO', // Klasifikasi Rincian Output
-  RO = 'RO',   // Rincian Output
+  ACTIVITY = 'ACTIVITY', // Kegiatan
+  KRO = 'KRO',           // Klasifikasi Rincian Output
+  RO = 'RO',             // Rincian Output
   COMPONENT = 'COMPONENT',
   SUBCOMPONENT = 'SUBCOMPONENT',
-  HEADER_ACCOUNT = 'HEADER_ACCOUNT', // A. TANPA SUB KOMPONEN
-  ITEM = 'ITEM'
+  ACCOUNT = 'ACCOUNT',   // Akun (6 Digit)
+  DETAIL = 'DETAIL'      // Detail
 }
 
 export enum ChangeStatus {
@@ -62,6 +62,12 @@ export interface BudgetRow {
   isOpen?: boolean; // For UI toggling
 }
 
+export interface RevisionMeta {
+    id: string;
+    note: string;
+    timestamp: string;
+}
+
 export interface ThemeConfig {
   [ChangeStatus.CHANGED]: string;
   [ChangeStatus.NEW]: string;
@@ -75,7 +81,7 @@ export type MasterData = {
     [key in RowType]?: { code: string; desc: string }[];
 };
 
-// Helper to check if a row is a calculation leaf (usually ITEM or RO depending on depth)
+// Helper to check if a row is a calculation leaf (usually ACCOUNT or DETAIL depending on depth)
 export const isLeafCalculation = (type: RowType): boolean => {
-  return type === RowType.ITEM || type === RowType.RO; 
+  return type === RowType.ACCOUNT || type === RowType.DETAIL; 
 };
