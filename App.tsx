@@ -14,7 +14,7 @@ import { MONTH_NAMES, QUARTERS, defaultTheme, formatCurrency, getAccountPrefix, 
 import { api } from './api';
 import { initialData } from './data';
 
-export const App = () => {
+export const App: React.FC = () => {
   const [data, setData] = useState<BudgetRow[]>([]);
   // Use ref to track latest data for async callbacks
   const dataRef = useRef<BudgetRow[]>([]);
@@ -763,6 +763,7 @@ export const App = () => {
           </div>
       );
   }
+  };
 
   // Style constants for footer cells - NO STICKY (Static positioning)
   const footerCellClass = `border-r border-t border-gray-300 ${isDarkMode ? 'bg-gray-700 border-gray-500 text-gray-200' : 'bg-gray-200 border-gray-400 text-gray-800'} font-bold text-[11px]`;
@@ -1121,4 +1122,4 @@ export const App = () => {
       </div>
     </div>
   );
-}
+};
