@@ -30,6 +30,7 @@ class RowType(str, Enum):
     SUBCOMPONENT = "SUBCOMPONENT"
     ACCOUNT = "ACCOUNT"
     DETAIL = "DETAIL"
+    UNIT = "UNIT"
 
 
 class ChangeStatus(str, Enum):
