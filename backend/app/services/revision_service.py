@@ -46,4 +46,11 @@ class RevisionService:
             data=row["data"]
         )
 
+    async def delete_revision(self, rev_id: str) -> bool:
+        collection = self.get_collection()
+        # Menghapus dokumen berdasarkan _id
+        result = await collection.delete_one({"_id": ObjectId(rev_id)})
+        # Mengembalikan True jika ada data yang terhapus (count > 0)
+        return result.deleted_count > 0
+
 revision_service = RevisionService()
