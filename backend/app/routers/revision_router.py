@@ -31,7 +31,7 @@ async def get_revision_detail(rev_id: str):
         raise HTTPException(status_code=404, detail="Revision not found")
     return rev
 
-@app.delete("/api/revisions/{rev_id}")
+@router.delete("/api/revisions/{rev_id}")
 def delete_revision(rev_id: str):
     # 1. Hapus dari metadata (list revisi)
     # Load data revisions.json yang ada
