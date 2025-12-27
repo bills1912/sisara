@@ -31,21 +31,12 @@ async def get_revision_detail(rev_id: str):
         raise HTTPException(status_code=404, detail="Revision not found")
     return rev
 
-@router.delete("/api/revisions/{rev_id}")
-def delete_revision(rev_id: str):
-    # 1. Hapus dari metadata (list revisi)
-    # Load data revisions.json yang ada
-    revisions = load_json(FILES["revisions_meta"], [])
-    
-    # Filter list, buang item yang id-nya sama dengan rev_id
-    revisions = [r for r in revisions if r['id'] != rev_id]
-    
-    # Simpan kembali list yang sudah diperbarui
-    save_json(FILES["revisions_meta"], revisions)
-    
-    # 2. Hapus file fisik detail revisi
-    # File detail tersimpan di folder 'data/revisions/' dengan nama {id}.json
-    path = os.path.join(REVISIONS_DIR, f"{rev_id}.json")
+@router.delete("/{rev_id}")
+async def delete_revision(rev_id: str):
+    success = await revision_service.delete_revision(rev_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Revision not found")
+    return {"status": "success", "message": "Revision deleted successfully"}
     
     if os.path.exists(path):
         os.remove(path)
