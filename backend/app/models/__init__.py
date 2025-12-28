@@ -19,6 +19,13 @@ from app.models.schemas import (
     RevisionCreate,
     RevisionResponse,
     RevisionDetailResponse,
+    UserRole,
+    UserBase,
+    UserCreate,
+    UserInDB,
+    UserResponse,
+    Token,
+    SystemState,
 )
 
 __all__ = [
@@ -42,4 +49,11 @@ __all__ = [
     "RevisionCreate",
     "RevisionResponse",
     "RevisionDetailResponse",
+    "UserRole",
+    "UserBase",
+    "UserCreate",
+    "UserInDB",
+    "UserResponse",
+    "Token",
+    "SystemState",
 ]
