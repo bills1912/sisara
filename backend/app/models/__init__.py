@@ -19,6 +19,9 @@ from app.models.schemas import (
     RevisionCreate,
     RevisionResponse,
     RevisionDetailResponse,
+)
+
+from app.models.user_models import (
     UserRole,
     UserBase,
     UserCreate,
