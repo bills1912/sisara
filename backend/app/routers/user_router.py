@@ -3,7 +3,7 @@ from typing import List
 from app.database import get_collection
 from app.auth.security import get_password_hash, oauth2_scheme
 from app.models.user_models import UserResponse, UserCreate, UserUpdate, UserRole
-from app.routers.auth import read_users_me # Reuse fungsi auth untuk validasi token
+from app.routers.auth_router import read_users_me # Reuse fungsi auth untuk validasi token
 
 router = APIRouter(prefix="/api/users", tags=["User Management"])
 
