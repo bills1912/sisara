@@ -20,13 +20,17 @@ async def get_current_ppk_user(current_user: UserResponse = Depends(read_users_m
 # --- GET ALL USERS ---
 @router.get("", response_model=List[UserResponse])
 async def get_all_users(current_user: UserResponse = Depends(read_users_me)):
-    # Semua user yang login (PPK/Operator) boleh melihat list user (opsional, bisa dibatasi ke PPK saja)
     collection = get_collection("users")
     users_cursor = collection.find({})
     users = await users_cursor.to_list(length=100)
     
-    # Mapping _id ObjectId ke string dilakukan otomatis oleh Pydantic UserResponse
-    return [UserResponse(id=str(user["_id"]), **user) for user in users]
+    results = []
+    for user in users:
+        # Hapus hashed_password dari dictionary sebelum mapping agar aman
+        user_data = {k: v for k, v in user.items() if k != "hashed_password"}
+        results.append(UserResponse(id=str(user["_id"]), **user_data))
+        
+    return results
 
 # --- CREATE USER ---
 @router.post("", response_model=UserResponse)
