@@ -93,4 +93,7 @@ async def read_users_me(token: str = Depends(oauth2_scheme)):
     user = await collection.find_one({"username": username})
     if user is None:
         raise credentials_exception
-    return UserResponse(id=str(user["_id"]), **user)
+    
+    user_id = str(user.pop("_id"))
+    
+    return UserResponse(id=user_id, **user)

@@ -26,9 +26,11 @@ async def get_all_users(current_user: UserResponse = Depends(read_users_me)):
     
     results = []
     for user in users:
-        # Hapus hashed_password dari dictionary sebelum mapping agar aman
-        user_data = {k: v for k, v in user.items() if k != "hashed_password"}
-        results.append(UserResponse(id=str(user["_id"]), **user_data))
+        # PERBAIKAN: Ambil ID string, buang _id (ObjectId) dan hashed_password dari dict
+        user_id = str(user["_id"])
+        user_data = {k: v for k, v in user.items() if k not in ["hashed_password", "_id"]}
+        
+        results.append(UserResponse(id=user_id, **user_data))
         
     return results
 
