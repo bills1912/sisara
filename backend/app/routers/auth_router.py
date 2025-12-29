@@ -8,46 +8,46 @@ from jose import JWTError, jwt
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
-@router.post("/setup", status_code=201)
-async def setup_default_users():
-    """
-    Setup atau Reset user default.
-    Menggunakan upsert=True untuk memperbaiki data user jika password rusak/hash salah.
-    """
-    collection = get_collection("users")
+# @router.post("/setup", status_code=201)
+# async def setup_default_users():
+#     """
+#     Setup atau Reset user default.
+#     Menggunakan upsert=True untuk memperbaiki data user jika password rusak/hash salah.
+#     """
+#     collection = get_collection("users")
     
-    users = [
-        {
-            "username": "ppk_user",
-            "full_name": "Budi Santoso (PPK)",
-            "role": UserRole.PPK.value,
-            "password": "ppk123"
-        },
-        {
-            "username": "operator_user",
-            "full_name": "Siti Aminah (Operator)",
-            "role": UserRole.OPERATOR.value,
-            "password": "operator123"
-        }
-    ]
+#     users = [
+#         {
+#             "username": "ppk_user",
+#             "full_name": "Budi Santoso (PPK)",
+#             "role": UserRole.PPK.value,
+#             "password": "ppk123"
+#         },
+#         {
+#             "username": "operator_user",
+#             "full_name": "Siti Aminah (Operator)",
+#             "role": UserRole.OPERATOR.value,
+#             "password": "operator123"
+#         }
+#     ]
 
-    for user_data in users:
-        hashed = get_password_hash(user_data["password"])
-        # Update user jika ada, Insert jika belum ada (Upsert)
-        # Ini akan menimpa password lama dengan hash yang valid
-        await collection.update_one(
-            {"username": user_data["username"]},
-            {
-                "$set": {
-                    "full_name": user_data["full_name"],
-                    "role": user_data["role"],
-                    "hashed_password": hashed
-                }
-            },
-            upsert=True
-        )
+#     for user_data in users:
+#         hashed = get_password_hash(user_data["password"])
+#         # Update user jika ada, Insert jika belum ada (Upsert)
+#         # Ini akan menimpa password lama dengan hash yang valid
+#         await collection.update_one(
+#             {"username": user_data["username"]},
+#             {
+#                 "$set": {
+#                     "full_name": user_data["full_name"],
+#                     "role": user_data["role"],
+#                     "hashed_password": hashed
+#                 }
+#             },
+#             upsert=True
+#         )
     
-    return {"message": "Default users setup/repaired successfully"}
+#     return {"message": "Default users setup/repaired successfully"}
 
 @router.post("/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
