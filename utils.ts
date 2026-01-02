@@ -18,13 +18,11 @@ export const formatPercent = (value: number) => {
     }).format(value);
 };
 
-// New helper for input display (10000 -> "10.000")
 export const formatNumberForInput = (value: number | undefined | null): string => {
   if (value === undefined || value === null || isNaN(value) || value === 0) return '';
   return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
-// New helper to parse input back to number ("10.000" -> 10000)
 export const parseNumberFromInput = (input: string): number => {
   const clean = input.replace(/\./g, '');
   return parseFloat(clean) || 0;
@@ -58,7 +56,6 @@ export const getChangeStatus = (row: BudgetRow): ChangeStatus => {
 };
 
 export const getAccountPrefix = (code: string): '51' | '52' | '53' | 'OTHER' => {
-    // Remove dots and trim
     const cleanCode = code.replace(/\./g, '').trim();
     if (cleanCode.startsWith('51')) return '51';
     if (cleanCode.startsWith('52')) return '52';
@@ -68,23 +65,23 @@ export const getAccountPrefix = (code: string): '51' | '52' | '53' | 'OTHER' => 
 
 export const defaultTheme: ThemeConfig = {
   [ChangeStatus.UNCHANGED]: '#ffffff',
-  [ChangeStatus.CHANGED]: '#fed7aa', // orange-200
-  [ChangeStatus.NEW]: '#a5f3fc',     // cyan-200
-  [ChangeStatus.DELETED]: '#ef4444', // red-500
-  [ChangeStatus.BLOCKED]: '#d8b4fe', // purple-300
+  [ChangeStatus.CHANGED]: '#fed7aa', 
+  [ChangeStatus.NEW]: '#a5f3fc',     
+  [ChangeStatus.DELETED]: '#ef4444', 
+  [ChangeStatus.BLOCKED]: '#d8b4fe', 
 };
 
 export const getRowIndentClass = (type: string): string => {
   switch (type) {
     case 'SATKER': return 'pl-1';
     case 'PROGRAM': return 'pl-2';
-    case 'ACTIVITY': return 'pl-6'; // Kegiatan
+    case 'ACTIVITY': return 'pl-6'; 
     case 'KRO': return 'pl-10';
     case 'RO': return 'pl-14';
     case 'COMPONENT': return 'pl-20';
     case 'SUBCOMPONENT': return 'pl-24';
-    case 'ACCOUNT': return 'pl-28'; // Akun
-    case 'DETAIL': return 'pl-32';  // Detail
+    case 'ACCOUNT': return 'pl-28'; 
+    case 'DETAIL': return 'pl-32';  
     default: return 'pl-2';
   }
 };
@@ -94,8 +91,8 @@ export const getRowBaseColor = (type: string, isDarkMode: boolean): string => {
     
     switch (type) {
         case RowType.SATKER: return 'bg-gray-100 font-extrabold text-gray-900 border-gray-300';
-        case RowType.PROGRAM: return 'bg-sky-100 font-bold text-gray-900'; // Changed to bg-sky-100
-        case RowType.ACTIVITY: return 'bg-indigo-50 font-bold text-indigo-900'; // Kegiatan - New Color
+        case RowType.PROGRAM: return 'bg-sky-100 font-bold text-gray-900'; 
+        case RowType.ACTIVITY: return 'bg-indigo-50 font-bold text-indigo-900'; 
         case RowType.KRO: return 'bg-emerald-50'; 
         case RowType.RO: return 'bg-amber-50'; 
         case RowType.COMPONENT: return 'bg-white';
@@ -110,13 +107,13 @@ export const getRowBaseColorHex = (type: string, isDarkMode: boolean): string =>
     if (isDarkMode) return '#1f2937'; 
     
     switch (type) {
-        case RowType.SATKER: return '#f3f4f6'; // gray-100
-        case RowType.PROGRAM: return '#e0f2fe'; // sky-100
-        case RowType.ACTIVITY: return '#eef2ff'; // indigo-50
-        case RowType.KRO: return '#ecfdf5'; // emerald-50
-        case RowType.RO: return '#fffbeb'; // amber-50
-        case RowType.ACCOUNT: return '#f9fafb'; // gray-50
-        default: return '#ffffff'; // white
+        case RowType.SATKER: return '#f3f4f6'; 
+        case RowType.PROGRAM: return '#e0f2fe'; 
+        case RowType.ACTIVITY: return '#eef2ff'; 
+        case RowType.KRO: return '#ecfdf5'; 
+        case RowType.RO: return '#fffbeb'; 
+        case RowType.ACCOUNT: return '#f9fafb'; 
+        default: return '#ffffff'; 
     }
 };
 
@@ -130,7 +127,7 @@ export const getRowTextStyle = (type: string): string => {
         case RowType.COMPONENT: return 'font-semibold text-gray-800';
         case RowType.SUBCOMPONENT: return 'font-medium italic text-gray-600';
         case RowType.ACCOUNT: return 'font-bold text-gray-700';
-        case RowType.DETAIL: return 'text-gray-700'; // Normal text, ensure visible
+        case RowType.DETAIL: return 'text-gray-700'; 
         default: return 'text-gray-900';
     }
 };
@@ -165,17 +162,63 @@ export const recalculateBudget = (rows: BudgetRow[]): BudgetRow[] => {
         // Calculate Sums from direct children
         const sumSemula = updatedChildren.reduce((acc, child) => acc + (child.semula?.total || 0), 0);
         const sumMenjadi = updatedChildren.reduce((acc, child) => acc + (child.menjadi?.total || 0), 0);
+        const sumEfficiency = updatedChildren.reduce((acc, child) => acc + (child.efficiency || 0), 0);
         
         // Construct updated row with calculated totals
         return {
             ...row,
             children: updatedChildren,
+            efficiency: sumEfficiency,
             semula: row.semula 
                 ? { ...row.semula, total: sumSemula } 
                 : (sumSemula > 0 ? { volume: 0, unit: '', price: 0, total: sumSemula } : null),
             menjadi: row.menjadi 
                 ? { ...row.menjadi, total: sumMenjadi } 
                 : (sumMenjadi > 0 ? { volume: 0, unit: '', price: 0, total: sumMenjadi } : null)
+        };
+    });
+};
+
+export const overwriteSemulaWithMenjadi = (rows: BudgetRow[]): BudgetRow[] => {
+    return rows.map(row => {
+        // 1. Recursive Step: Process children first
+        if (row.children && row.children.length > 0) {
+            const updatedChildren = overwriteSemulaWithMenjadi(row.children);
+            
+            // For Parent nodes, we preserve structure but reset manual efficiency.
+            // RecalculateBudget will handle the summing up of Semula/Menjadi later.
+            return {
+                ...row,
+                children: updatedChildren,
+                efficiency: 0, 
+            };
+        }
+
+        // 2. Base Case: Leaf Nodes
+        // Logic Perbaikan:
+        // Cek total nilai Menjadi dan Semula
+        const totalMenjadi = row.menjadi?.total || 0;
+        const totalSemula = row.semula?.total || 0;
+        
+        let sourceForBaseline = row.menjadi; // Default ambil dari Menjadi
+
+        // KASUS PENTING: Jika Menjadi 0 (kosong) TAPI Semula ada isinya > 0,
+        // Asumsikan user baru saja input data awal di Semula dan belum mengisi Menjadi.
+        // Maka, pertahankan data Semula tersebut sebagai baseline baru.
+        if (totalMenjadi === 0 && totalSemula > 0) {
+            sourceForBaseline = row.semula;
+        }
+
+        // Deep copy untuk menghindari referensi
+        const newDetail = sourceForBaseline 
+            ? { ...sourceForBaseline } 
+            : { volume: 0, unit: '', price: 0, total: 0 };
+
+        return {
+            ...row,
+            efficiency: 0, // Reset efficiency
+            semula: { ...newDetail }, // Semula Baru = Menjadi (atau Semula jika Menjadi kosong)
+            menjadi: { ...newDetail }, // Menjadi Baru = Disamakan dengan Semula agar selisih 0
         };
     });
 };

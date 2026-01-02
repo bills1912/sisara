@@ -9,6 +9,7 @@ export const initialData: BudgetRow[] = [
     type: RowType.SATKER,
     semula: { volume: 0, unit: '', price: 0, total: 0 },
     menjadi: { volume: 0, unit: '', price: 0, total: 0 },
+    efficiency: 0,
     monthlyAllocation: {},
     isOpen: true,
     children: [
@@ -19,6 +20,7 @@ export const initialData: BudgetRow[] = [
             type: RowType.PROGRAM,
             semula: null,
             menjadi: null,
+            efficiency: 0,
             monthlyAllocation: {},
             isOpen: true,
             children: [
@@ -29,6 +31,7 @@ export const initialData: BudgetRow[] = [
                     type: RowType.ACTIVITY,
                     semula: null,
                     menjadi: null,
+                    efficiency: 0,
                     monthlyAllocation: {},
                     isOpen: true,
                     children: [
@@ -39,6 +42,7 @@ export const initialData: BudgetRow[] = [
                             type: RowType.KRO,
                             semula: null,
                             menjadi: null,
+                            efficiency: 0,
                             monthlyAllocation: {},
                             isOpen: true,
                             children: [
@@ -49,6 +53,7 @@ export const initialData: BudgetRow[] = [
                                 type: RowType.RO,
                                 semula: { volume: 1, unit: 'Layanan', price: 0, total: 0 },
                                 menjadi: { volume: 1, unit: 'Layanan', price: 0, total: 0 },
+                                efficiency: 0,
                                 monthlyAllocation: {},
                                 isOpen: true,
                                 children: [
@@ -59,6 +64,7 @@ export const initialData: BudgetRow[] = [
                                     type: RowType.COMPONENT,
                                     semula: { volume: 1, unit: 'Layanan', price: 0, total: 0 },
                                     menjadi: { volume: 1, unit: 'Layanan', price: 0, total: 0 },
+                                    efficiency: 0,
                                     monthlyAllocation: {},
                                     isOpen: true,
                                     children: [
@@ -69,6 +75,7 @@ export const initialData: BudgetRow[] = [
                                         type: RowType.SUBCOMPONENT,
                                         semula: null,
                                         menjadi: null,
+                                        efficiency: 0,
                                         monthlyAllocation: {},
                                         isOpen: true,
                                         children: [
@@ -79,6 +86,7 @@ export const initialData: BudgetRow[] = [
                                             type: RowType.ACCOUNT,
                                             semula: { volume: 1, unit: 'PAKET', price: 1490000, total: 1490000 },
                                             menjadi: { volume: 1, unit: 'PAKET', price: 1490000, total: 1490000 },
+                                            efficiency: 0,
                                             monthlyAllocation: {},
                                             isOpen: true,
                                             children: [
@@ -89,6 +97,7 @@ export const initialData: BudgetRow[] = [
                                                     type: RowType.DETAIL,
                                                     semula: { volume: 1, unit: 'PAKET', price: 1490000, total: 1490000 },
                                                     menjadi: { volume: 1, unit: 'PAKET', price: 1490000, total: 1490000 },
+                                                    efficiency: 0,
                                                     monthlyAllocation: {
                                                         0: { rpd: 500000, realization: 0, spm: '', date: '', isVerified: false, sp2d: 0 },
                                                         5: { rpd: 990000, realization: 0, spm: '', date: '', isVerified: false, sp2d: 0 }

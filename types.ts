@@ -8,7 +8,8 @@ export enum RowType {
   COMPONENT = 'COMPONENT',
   SUBCOMPONENT = 'SUBCOMPONENT',
   ACCOUNT = 'ACCOUNT',   // Akun (6 Digit)
-  DETAIL = 'DETAIL'      // Detail
+  DETAIL = 'DETAIL',      // Detail
+  UNIT = 'UNIT'          // Satuan (Master Data only)
 }
 
 export enum ChangeStatus {
@@ -17,6 +18,18 @@ export enum ChangeStatus {
   NEW = 'NEW',
   DELETED = 'DELETED',
   BLOCKED = 'BLOCKED'
+}
+
+export enum UserRole {
+  PPK = 'PPK',
+  OPERATOR = 'OPERATOR'
+}
+
+export interface User {
+  username: string;
+  fullName: string;
+  role: UserRole;
+  token?: string;
 }
 
 export interface BudgetDetail {
@@ -51,6 +64,9 @@ export interface BudgetRow {
   // Data Menjadi (Revised)
   menjadi: BudgetDetail | null;
   
+  // Manual Efficiency Input
+  efficiency: number; 
+
   // Monthly Plan (Only relevant for 'Menjadi')
   monthlyAllocation: MonthlyAllocation;
 
