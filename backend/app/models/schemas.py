@@ -31,6 +31,7 @@ class RowType(str, Enum):
     ACCOUNT = "ACCOUNT"
     DETAIL = "DETAIL"
     UNIT = "UNIT"
+    PAYMENT_MECHANISM = 'PAYMENT_MECHANISM'
 
 
 class ChangeStatus(str, Enum):
