@@ -50,12 +50,14 @@ class BudgetDetail(BaseModel):
 
 
 class MonthlyDetail(BaseModel):
-    rpd: float = 0  # Rencana Penarikan Dana / Jumlah Realisasi
-    realization: float = 0  # Jumlah akan Realisasi
-    spm: str = ""  # No. SPM
-    date: str = ""  # Tanggal Pelaksanaan
-    isVerified: bool = False  # Ceklis
-    sp2d: float = 0  # Realisasi SP2D
+    rpd: float = 0              # Jumlah Realisasi
+    realization: float = 0      # Jumlah akan Direalisasikan
+    date: str = ""              # Tanggal Pelaksanaan Lapangan
+    isVerified: bool = False    # Ceklis sudah Realisasi
+    sp2d: float = 0             # Realisasi SP2D
+    paymentMechanism: str = ""  # Mekanisme Pembayaran (BARU)
+    spm: str = ""               # No. SPM
+    keterangan: str = ""        # Keterangan (BARU)
 
 
 class BudgetRowBase(BaseModel):
